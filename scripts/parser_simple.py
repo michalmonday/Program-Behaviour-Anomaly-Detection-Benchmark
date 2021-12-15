@@ -1,16 +1,16 @@
 #!/usr/bin/python3
 import re
-import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 import argparse
 import sys
+import json
 
 from extract_function_ranges_from_llvm_objdump import extract_function_ranges_from_llvm_objdump
 
+def bold(text): 
+    return "\033[1m" + text + "\033[0m"
 
 def get_pc(fname, main_addr, max_pc=None):
-    ''' df = pd.DataFrame
+    ''' fname = log file filename
         main_addr = 0x11fb2 (for example)
         max_pc = 0xffffff (for example, may be used to exclude library code) 
         '''
@@ -37,14 +37,14 @@ if __name__ == '__main__':
             help='Log file as outputted by qtrace -u exec ./program < normal_input.txt'
             )
 
-    parser.add_argument(
-            '-max',
-            '--max-pc',
-            type=int,
-            required=False,
-            default=None,
-            help='Program counters above this value will not be included in output.'
-            )
+#    parser.add_argument(
+#            '-max',
+#            '--max-pc',
+#            type=int,
+#            required=False,
+#            default=None,
+#            help='Program counters above this value will not be included in output.'
+#            )
 
     parser_group = parser.add_mutually_exclusive_group(required=True)
     parser_group.add_argument(
@@ -82,11 +82,21 @@ if __name__ == '__main__':
     #elif args.function_ranges:
     #    main_addr = json.load(args.function_ranges)['main'][0]
 
-    program_counters = get_pc(args.logfile.name, main_addr, max_pc = args.max_pc)
+    function_ranges = json.load(args.function_ranges)
+    main_addr = function_ranges['main'][0]
+    max_addr = function_ranges['total'][1]
+
+    program_counters = get_pc(args.logfile.name, main_addr, max_pc = max_addr)
     
-    print(program_counters)
     # for pc in program_counters:
     #     print(pc)
+
+    output_fname = args.logfile.name.split('.')[0] + '.pc'
+    with open(output_fname, 'w') as f:
+        f.write('\n'.join([f'{pc:X}' for pc in program_counters]))
+
+    print(sys.argv[0], 'outputted program counters to', bold(output_fname))
+
     
     
 

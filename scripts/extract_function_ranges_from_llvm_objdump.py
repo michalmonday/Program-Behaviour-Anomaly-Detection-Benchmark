@@ -89,7 +89,7 @@ if __name__ == '__main__':
     with open(out_fname, 'w') as f:
         json.dump(ranges, f, indent=4)
 
-    print(sys.argv[0], 'outputted to :', bold(out_fname))
+    print(sys.argv[0], 'outputted function ranges json to:', bold(out_fname))
 
 
 
