@@ -1,6 +1,8 @@
 
 if (($# < 2)); then
-    echo "Usage: ./$(basename $0) destination_at_qemu filenames_to_copy_separated_by_space"
+    >&2 echo ""
+    >&2 echo "Usage: ./$(basename $0) destination_at_qemu filenames_to_copy_separated_by_space"
+    >&2 echo ""
     exit 1
 fi
 

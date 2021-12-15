@@ -2,7 +2,7 @@ bold=$(tput bold)
 normal=$(tput sgr0)
 
 if [ $# -ne 1 ]; then
-LOG_FNAME=$(date +"%Y_%m_%d-%H_%M_%S").log
+LOG_FNAME=$(date +"%Y_%m_%d-%H:%M:%S").log
 else
 LOG_FNAME=test
 fi
