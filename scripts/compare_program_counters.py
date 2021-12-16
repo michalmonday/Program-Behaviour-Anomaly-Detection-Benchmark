@@ -1,4 +1,8 @@
 #!/usr/bin/python3
+
+# Example run:
+# !./% ../log_files/stack-mission_riscv64_compromised.pc ../log_files/stack-mission_riscv64_normal.pc -fr ../log_files/stack-mission_riscv64_llvm_objdump_ranges.json
+
 import re
 import numpy as np
 import pandas as pd
