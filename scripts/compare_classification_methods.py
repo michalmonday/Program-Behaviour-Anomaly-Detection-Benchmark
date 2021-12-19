@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 # Example run:
+# !./% --normal-pc ../log_files/stack-mission_riscv64_normal.pc --abnormal-pc ../log_files/stack-mission_riscv64_compromised.pc --function-ranges ../log_files/stack-missi on_riscv64_llvm_objdump_ranges.json
 
 import re
 import numpy as np
@@ -11,65 +12,68 @@ import argparse
 import sys
 import json
 
-def read_values(f):
-    with f:
-        return [int(line.strip(), 16) for line in f.readlines() if line]
+from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files
+# ax = plot_pc_histogram(df, function_ranges, bins=100)
+# ax2 = plot_pc_timeline(df, function_ranges)
+# df = df_from_pc_files(f_list)
+# pc = read_pc_values(f)
 
-def plot(df, function_ranges={}, bins=100):
-    ax = df.plot.hist(bins=bins, alpha=1/df.shape[1])
-    ax.get_xaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
-    ax.get_yaxis().set_major_formatter(lambda x,pos: f'{int(x)}')
-    # import pdb; pdb.set_trace()
-    x_start = ax.get_xticks()[0]
-    x_end = ax.get_xticks()[-1]
-    y_top = ax.transAxes.to_values()[3]
-    i = 0
-    function_line_width = 0.7
-    for func_name, (start, end) in function_ranges.items():
-        if func_name == 'total': continue
-        if start < x_start or end > x_end: continue
-        ax.axvline(x=start, color='black', linewidth=function_line_width)
-        # ax.axvline(x=end, color='black')
-        # ax.text(start, y_top*(0.8-i/100), func_name, rotation=90, va='bottom', fontsize='x-small')
-        # ax.text(start, y_top*0.7, func_name, rotation=90, va='bottom', fontsize='x-small')
-        i += 1
-    # ax_t.xaxis.tick_top()
-    # ax.legend(bbox_to_anchor=(0.1, 0.7))
-    ax_t = ax.twiny()
-    ax_t.tick_params(bottom=False, top=True, labelbottom=False, labeltop=True)
-    ax_t.set_xticks([v[0] for v in function_ranges.values()])
-    ax_t.set_xticklabels(list(function_ranges.keys()), fontdict={'fontsize':7}, rotation=90)
-    ax_t.set_xlim(*ax.get_xlim())
 
-    ax2 = df.plot(linewidth=0.7)
-    ax2.get_yaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
-    i = 0
-    for func_name, (start, end) in function_ranges.items():
-        if func_name == 'total': continue
-        if start < x_start or end > x_end: continue
-        ax2.axhline(y=start, color='black', linewidth=function_line_width)
-        # ax2.text(df.shape[0]*(0.9-i/80), start, func_name, rotation=0, va='bottom', fontsize='x-small')
-        # ax2.text(df.shape[0]*0.8, start, func_name, rotation=0, va='bottom', fontsize='x-small')
-        i += 1
-    ax2_t = ax2.twinx()
-    ax2_t.set_yticks([v[0] for v in function_ranges.values()])
-    ax2_t.set_yticklabels(list(function_ranges.keys()), fontdict={'fontsize':7})
-    ax2_t.set_ylim(*ax2.get_ylim())
+def unique_transitions(df):
+    ''' returns unique transitions between program counters 
+        Let's imagine that program consists of the following PC values:
+            0, 4, 8, 4, 8, 4, 8, 12
+    
+        In that case, the returned unique transitions would be:
+            (0,4)
+            (4,8)
+            (8,4)
+            (8,12)
 
-    df.plot(ax=ax2, marker='h', markersize=1, linestyle='none', legend=None)
-    plt.show()
+        The returned unique transitions may be used as a Finite State 
+        Automaton during program execution. Any observed transition will
+        indicate abnormal behaviour. This approach was used in:
+            "2001 - A Fast Automaton-Based Method for Detecting Anomalous Program Behaviors by Sekar et al."
+
+        How to extract unique transitions from pandas dataframe containing PC counters?
+        - stack all program runs PC values (multiple columns) on top of each other (separated by "NaN") in a single column
+        - clone all_pc column and shift the cloned version by -1
+        - drop rows with NaN
+        - get unique pairs from 2 columns
+    '''
+    # add NaN row to each column (to avoid recognizing the last PC of 1 run as first PC of 2nd run)
+    df = df.append(pd.Series(), ignore_index=True)
+    # stack all columns on top of each other
+    df = df.melt(value_name='all_pc').drop('variable',1)
+    # clone all_pc column and shift it by -1
+    df['all_pc_shifted'] = df['all_pc'].shift(-1)
+    # drop any rows with at least 1 NaN value ( as seen here: https://stackoverflow.com/a/13434501/4620679 )
+    df = df.dropna()
+    # get unique transitions
+    unique_transitions = df.drop_duplicates()
+    return unique_transitions
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
-            'pc_files',
+            '-n',
+            '--normal-pc',
             nargs='+',
+            required=True,
             type=argparse.FileType('r'),
-            help='Program counter files (.pc) as outputted by parser_simple.py'
+            help='Program counter files (.pc) of "known/normal" programs as outputted by parse_qtrace_log.py'
             )
 
-    parser_group = parser.add_mutually_exclusive_group(required=True)
-    parser_group.add_argument(
+    parser.add_argument(
+            '-a',
+            '--abnormal-pc',
+            nargs='+',
+            required=True,
+            type=argparse.FileType('r'),
+            help='Program counter files (.pc) of "unknown/abnormal" programs as outputted by parse_qtrace_log.py'
+            )
+
+    parser.add_argument(
             '-fr',
             '--function-ranges',
             type=argparse.FileType('r'),
@@ -77,16 +81,31 @@ if __name__ == '__main__':
             )
 
     args = parser.parse_args()
-    all_pc = []
-    for f in args.pc_files:
-        all_pc.append( read_values(f) )
+    df_n = df_from_pc_files(args.normal_pc, column_prefix='normal: ')
+    df_a = df_from_pc_files(args.abnormal_pc, column_prefix='abnormal: ')
+    
+    normal_ut = unique_transitions(df_n)
+    abnormal_ut = unique_transitions(df_a)
 
-    df = pd.DataFrame(all_pc, dtype=np.uint64, index=[f.name for f in args.pc_files]).T
+    # gets abnormal_ut entries that are not present in normal_ut
+    # (it ignores df index so that's why it's ugly)
 
-    if args.function_ranges:
-        plot(df, json.load(args.function_ranges) )
-    else:
-        plot(df)
+    # it's from: https://stackoverflow.com/a/50645672/4620679
+    # detected_ut = abnormal_ut[~abnormal_ut.stack().isin(normal_ut.stack().values).unstack()].dropna()
+    detected_ut = abnormal_ut[ ~abnormal_ut[ ~abnormal_ut.stack().isin(normal_ut.stack().values).unstack()].isna().all(axis=1) ].dropna()
+
+    # get PC values in abnormal run where unseen transitions are observed
+    df_a_detected_points = df_a[ df_a[df_a.columns[0]].rolling(2).apply(lambda x: ((detected_ut['all_pc'] == x.iloc[0]) & (detected_ut['all_pc_shifted'] == x.iloc[1])).any() ) > 0.0 ]
+
+
+    # function_ranges are used just for plotting
+    function_ranges = json.load(args.function_ranges) if args.function_ranges else {}
+
+    ax = plot_pc_timeline(df_a, function_ranges)
+    df_a_detected_points.plot(ax=ax, color='r', marker='*', markersize=10, linestyle='none', legend=None)
+
+    ax2 = plot_pc_timeline(df_n, function_ranges)
+    plt.show()
     
     import pdb; pdb.set_trace()
     

@@ -1,7 +1,16 @@
+import pandas as pd
+import numpy as np
 
 def read_pc_values(f):
     with f:
         return [int(line.strip(), 16) for line in f.readlines() if line]
+
+def df_from_pc_files(f_list, column_prefix=''):
+    all_pc = []
+    for f in f_list:
+        all_pc.append( read_pc_values(f) )
+    df = pd.DataFrame(all_pc, dtype=np.uint64, index=[column_prefix + f.name for f in f_list]).T
+    return df
 
 def plot_pc_histogram(df, function_ranges={}, bins=100, function_line_width=0.7):
     ax = df.plot.hist(bins=bins, alpha=1/df.shape[1])
@@ -13,7 +22,7 @@ def plot_pc_histogram(df, function_ranges={}, bins=100, function_line_width=0.7)
     for func_name, (start, end) in function_ranges.items():
         if func_name == 'total': continue
         if start < x_start or end > x_end: continue
-        ax.axvline(x=start, color='black', linewidth=function_line_width)
+        ax.axvline(x=start, color='lightgray', linewidth=function_line_width, linestyle='dashed')
         # ax.axvline(x=end, color='black')
         # ax.text(start, y_top*(0.8-i/100), func_name, rotation=90, va='bottom', fontsize='x-small')
         # ax.text(start, y_top*0.7, func_name, rotation=90, va='bottom', fontsize='x-small')
@@ -27,8 +36,11 @@ def plot_pc_histogram(df, function_ranges={}, bins=100, function_line_width=0.7)
     ax_t.set_xlim(*ax.get_xlim())
     return ax
     
-def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7):
-    ax2 = df.plot(linewidth=0.7)
+def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7, ax=None):
+    if ax:
+        ax2 = df.plot(linewidth=0.7, ax=ax)
+    else:
+        ax2 = df.plot(linewidth=0.7)
     y_start, y_end = ax2.get_yticks()[0], ax2.get_yticks()[-1]
     ax2.get_yaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
     i = 0
@@ -37,7 +49,7 @@ def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7):
         print(start, end, y_start, y_end)
         if start < y_start or end > y_end: continue
         print(start)
-        ax2.axhline(y=start, color='black', linewidth=function_line_width)
+        ax2.axhline(y=start, color='lightgray', linewidth=function_line_width, linestyle='dashed')
         # ax2.text(df.shape[0]*(0.9-i/80), start, func_name, rotation=0, va='bottom', fontsize='x-small')
         # ax2.text(df.shape[0]*0.8, start, func_name, rotation=0, va='bottom', fontsize='x-small')
         i += 1
