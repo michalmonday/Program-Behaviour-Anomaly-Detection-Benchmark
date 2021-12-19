@@ -37,6 +37,13 @@ if __name__ == '__main__':
             help='Log file as outputted by qtrace -u exec ./program < normal_input.txt'
             )
 
+    parser.add_argument(
+            '-o',
+            metavar='',
+            type=str,
+            required=False,
+            help='Output file name. Default is the same as input (but with ".pc" extension.'
+
 #    parser.add_argument(
 #            '-max',
 #            '--max-pc',
@@ -91,7 +98,7 @@ if __name__ == '__main__':
     # for pc in program_counters:
     #     print(pc)
 
-    output_fname = args.logfile.name.split('.')[0] + '.pc'
+    output_fname = args.o if args.o else args.logfile.name.split('.')[0] + '.pc'
     with open(output_fname, 'w') as f:
         f.write('\n'.join([f'{pc:X}' for pc in program_counters]))
 

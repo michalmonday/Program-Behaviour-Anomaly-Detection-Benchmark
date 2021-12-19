@@ -25,10 +25,11 @@ def plot(df, function_ranges={}, bins=100):
     x_end = ax.get_xticks()[-1]
     y_top = ax.transAxes.to_values()[3]
     i = 0
+    function_line_width = 0.7
     for func_name, (start, end) in function_ranges.items():
         if func_name == 'total': continue
         if start < x_start or end > x_end: continue
-        ax.axvline(x=start, color='black')
+        ax.axvline(x=start, color='black', linewidth=function_line_width)
         # ax.axvline(x=end, color='black')
         # ax.text(start, y_top*(0.8-i/100), func_name, rotation=90, va='bottom', fontsize='x-small')
         # ax.text(start, y_top*0.7, func_name, rotation=90, va='bottom', fontsize='x-small')
@@ -47,7 +48,7 @@ def plot(df, function_ranges={}, bins=100):
     for func_name, (start, end) in function_ranges.items():
         if func_name == 'total': continue
         if start < x_start or end > x_end: continue
-        ax2.axhline(y=start, color='black')
+        ax2.axhline(y=start, color='black', linewidth=function_line_width)
         # ax2.text(df.shape[0]*(0.9-i/80), start, func_name, rotation=0, va='bottom', fontsize='x-small')
         # ax2.text(df.shape[0]*0.8, start, func_name, rotation=0, va='bottom', fontsize='x-small')
         i += 1
