@@ -12,8 +12,8 @@ def df_from_pc_files(f_list, column_prefix=''):
     df = pd.DataFrame(all_pc, dtype=np.uint64, index=[column_prefix + f.name for f in f_list]).T
     return df
 
-def plot_pc_histogram(df, function_ranges={}, bins=100, function_line_width=0.7):
-    ax = df.plot.hist(bins=bins, alpha=1/df.shape[1])
+def plot_pc_histogram(df, function_ranges={}, bins=100, function_line_width=0.7, title='Histogram of program counters (frequency distribution)'):
+    ax = df.plot.hist(bins=bins, alpha=1/df.shape[1], title=title)
     ax.get_xaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
     ax.get_yaxis().set_major_formatter(lambda x,pos: f'{int(x)}')
     x_start, x_end = ax.get_xticks()[0], ax.get_xticks()[-1]
@@ -34,21 +34,26 @@ def plot_pc_histogram(df, function_ranges={}, bins=100, function_line_width=0.7)
     ax_t.set_xticks([v[0] for v in function_ranges.values()])
     ax_t.set_xticklabels(list(function_ranges.keys()), fontdict={'fontsize':7}, rotation=90)
     ax_t.set_xlim(*ax.get_xlim())
+
+    ax.set_xlabel('Program counter value (address)')
+    ax.set_ylabel('Frequency')
     return ax
     
-def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7, ax=None):
+def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7, ax=None, title='Timeline of program counters'):
     if ax:
-        ax2 = df.plot(linewidth=0.7, ax=ax)
+        ax2 = df.plot(linewidth=0.7, ax=ax, title=title)
     else:
-        ax2 = df.plot(linewidth=0.7)
+        ax2 = df.plot(linewidth=0.7, title=title)
+    ax2.set_xlabel('Instruction index')
+    ax2.set_ylabel('Program counter value (address)')
     y_start, y_end = ax2.get_yticks()[0], ax2.get_yticks()[-1]
     ax2.get_yaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
     i = 0
     for func_name, (start, end) in function_ranges.items():
         if func_name == 'total': continue
-        print(start, end, y_start, y_end)
+        # print(start, end, y_start, y_end)
         if start < y_start or end > y_end: continue
-        print(start)
+        # print(start)
         ax2.axhline(y=start, color='lightgray', linewidth=function_line_width, linestyle='dashed')
         # ax2.text(df.shape[0]*(0.9-i/80), start, func_name, rotation=0, va='bottom', fontsize='x-small')
         # ax2.text(df.shape[0]*0.8, start, func_name, rotation=0, va='bottom', fontsize='x-small')

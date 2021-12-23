@@ -1,10 +1,8 @@
 #!/usr/bin/python3
-import re
 import argparse
+import re
 import sys
 import json
-
-from extract_function_ranges_from_llvm_objdump import extract_function_ranges_from_llvm_objdump
 
 def bold(text): 
     return "\033[1m" + text + "\033[0m"
@@ -43,6 +41,14 @@ if __name__ == '__main__':
             type=str,
             required=False,
             help='Output file name. Default is the same as input (but with ".pc" extension.'
+            )
+
+    parser.add_argument(
+            '-dll',
+            '--include-dlls',
+            action='store_true',
+            help='Use this flag to extract all program counter values from main until the end of file'
+            )
 
 #    parser.add_argument(
 #            '-max',
@@ -60,6 +66,7 @@ if __name__ == '__main__':
             type=argparse.FileType('r'),
             help='File name containing output of extract_function_ranges_from_llvm_objdump.py'
             )
+
 
     #parser_group.add_argument(
     #        '-L',
@@ -91,7 +98,7 @@ if __name__ == '__main__':
 
     function_ranges = json.load(args.function_ranges)
     main_addr = function_ranges['main'][0]
-    max_addr = function_ranges['total'][1]
+    max_addr = function_ranges['total'][1] if not args.include_dlls else None
 
     program_counters = get_pc(args.logfile.name, main_addr, max_pc = max_addr)
     
