@@ -2,6 +2,7 @@
 
 # Example run:
 # !./% --normal-pc ../log_files/stack-mission_riscv64_normal.pc --abnormal-pc ../log_files/stack-mission_riscv64_compromised.pc --function-ranges ../log_files/stack-missi on_riscv64_llvm_objdump_ranges.json
+# !./% -n *normal*pc -a *compr*pc -fr *json 
 
 import argparse
 parser = argparse.ArgumentParser()
@@ -53,10 +54,9 @@ from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_p
 def unique_transitions(df):
     ''' returns unique transitions between program counters 
         Let's imagine that program consists of the following PC values:
-            0, 4, 8, 4, 8, 4, 8, 12
+            4, 8, 4, 8, 4, 8, 4, 8, 4, 8, 4, 8, 12
     
         In that case, the returned unique transitions would be:
-            (0,4)
             (4,8)
             (8,4)
             (8,12)
