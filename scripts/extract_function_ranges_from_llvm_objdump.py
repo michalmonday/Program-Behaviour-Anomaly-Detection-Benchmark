@@ -4,6 +4,7 @@ import re
 import json
 import os
 from pprint import pprint
+import sys
 
 def bold(text): 
     return "\033[1m" + text + "\033[0m"
@@ -13,13 +14,13 @@ def extract_function_ranges_from_llvm_objdump(f_name):
         data = f.read()
 
     text_section = re.search(
-            r'Disassembly of section \.text:(.+?)Disassembly of section', 
+            r'Disassembly of section \.text:(.+?\n)Disassembly of section', 
             data, 
             re.MULTILINE | re.DOTALL
             ).group(1)
 
     funcs = re.findall(
-            r'\d+\s<([^>]+)>:(.+?)\n\n', 
+            r'[0-9a-fA-F]+\s<([^>]+)>:(.+?)\n\n', 
             text_section, 
             re.MULTILINE | re.DOTALL
             )
@@ -28,7 +29,10 @@ def extract_function_ranges_from_llvm_objdump(f_name):
     ranges['total'] = [999999999999999, -1] # min, max starting values
     for name, body in funcs:
         addresses = re.findall(r'\n\s+([0-9a-fA-F]+)', body, re.MULTILINE | re.DOTALL)
-        if not addresses: continue
+        if not addresses: 
+            print(sys.argv[0], f'didn\'t find any addresses for {name} function')
+            continue
+
         start = int(addresses[0], 16)
         end = int(addresses[-1], 16)
 
@@ -85,7 +89,7 @@ if __name__ == '__main__':
     with open(out_fname, 'w') as f:
         json.dump(ranges, f, indent=4)
 
-    print('Outputted to :', bold(out_fname))
+    print(sys.argv[0], 'outputted function ranges json to:', bold(out_fname))
 
 
 

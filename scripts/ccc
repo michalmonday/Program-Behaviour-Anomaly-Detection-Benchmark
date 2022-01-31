@@ -1,0 +1,148 @@
+#!/bin/sh
+#
+# ccc - Cross compilation script
+set -e
+set -u
+
+name=$(basename "$0")
+
+VERBOSE=${VERBOSE:-0}
+QUIET=${QUIET:-0}
+
+usage()
+{
+    cat <<EOF
+$name <arch> [...]
+
+Supported architectures:
+    aarch64         - conventional AArch64
+    morello-hybrid  - AArch64 Morello supporting CHERI
+    morello-purecap - AArch64 Morello pure-capability
+    riscv64         - conventional RISC-V 64-bit
+    riscv64-hybrid  - RISC-V 64-bit supporting CHERI
+    riscv64-purecap - RISC-V 64-bit pure-capability
+EOF
+    exit 1
+}
+
+err()
+{
+    ret=$1
+    shift
+    echo >&2 "$@"
+    exit "$ret"
+}
+
+warn()
+{
+    echo >&2 "$@"
+}
+
+debug()
+{
+    if [ "$VERBOSE" -ne 0 ]; then
+        echo >&2 "$@"
+    fi
+}
+
+info()
+{
+    if [ "$QUIET" -eq 0 ]; then
+        echo >&2 "$@"
+    fi
+}
+
+run()
+{
+    debug	# add space before normal multiline output
+    info "Running:" "$@"
+    "$@"
+}
+
+if [ $# -eq 0 ]; then
+    usage
+fi
+
+arch=$1
+shift
+
+cheri_arch_basename=${arch%%-*}
+cheri_sdk_name=sdk
+case $arch in
+aarch64)
+    cheri_arch_basename=morello
+    cheri_sdk_name=morello-sdk
+    arch_flags="-target aarch64-unknown-freebsd -march=morello+noa64c"
+    ;;
+morello-hybrid)
+    cheri_sdk_name=morello-sdk
+    arch_flags="-target aarch64-unknown-freebsd -march=morello+a64c"
+    ;;
+morello-purecap)
+    cheri_sdk_name=morello-sdk
+    arch_flags="-target aarch64-unknown-freebsd -march=morello+c64 -mabi=purecap -femulated-tls"
+    ;;
+riscv64)
+    arch_flags="-target riscv64-unknown-freebsd -march=rv64gc -mabi=lp64d -mno-relax"
+    ;;
+riscv64-hybrid)
+    arch_flags="-target riscv64-unknown-freebsd -march=rv64gcxcheri -mabi=lp64d -mno-relax"
+    ;;
+riscv64-purecap)
+    arch_flags="-target riscv64-unknown-freebsd -march=rv64gcxcheri -mabi=l64pc128d -mno-relax"
+    ;;
+*)
+    err 1 "Unsupported architecture '$arch'"
+    ;;
+esac
+
+CHERIBUILD_SDK="/tools/RISC-V/emulator/cheri/output/"${cheri_sdk_name}
+CLANG=${CLANG:-${CHERIBUILD_SDK}/bin/clang}
+
+case $name in
+*clang|*cc)	prog="${CLANG}" ;;
+*clang++|*c++)	prog="${CLANG}++" ;;
+*)	err 1 "Unsupported program name '$name'" ;;
+esac
+if [ ! -x "$prog" ]; then
+    err 1 "Target program '$prog' not found. Set CLANG or CHERIBUILD_SDK."
+fi
+debug "prog: $prog"
+
+SYSROOT=${SYSROOT:-${CHERIBUILD_SDK}/sysroot-${cheri_arch_basename}-purecap}
+if [ ! -d "$SYSROOT" ]; then
+    err 1 "Sysroot '$SYSROOT' does not exist. Set SYSROOT or CHERIBUILD_SDK."
+fi
+debug "sysroot: $SYSROOT"
+
+debug "arch_flags: $arch_flags"
+
+debug_flags="-g"
+debug "debug_flags: $debug_flags"
+
+opt_flags="-O2"
+debug "opt_flags: $opt_flags"
+
+sysroot_flags="--sysroot='$SYSROOT'"
+debug "sysroot_flags: $sysroot_flags"
+
+linker_flags="-fuse-ld=lld"
+debug "linker_flags: $linker_flags"
+
+diag_flags="-Wall -Wcheri"
+debug "diag_flags: $diag_flags"
+
+all_flags="$arch_flags $sysroot_flags $debug_flags $opt_flags $linker_flags $diag_flags"
+
+all_flags_rev=
+# shellcheck disable=SC2086 # intentional
+eval 'for flag in '$all_flags'; do
+    all_flags_rev="'"'"'$flag'"'"'${all_flags_rev:+ $all_flags_rev}"
+done'
+
+# shellcheck disable=SC2086 # intentional
+eval 'for flag in '$all_flags_rev'; do
+    set -- "$flag" "$@"
+done'
+
+run "$prog" "$@"
