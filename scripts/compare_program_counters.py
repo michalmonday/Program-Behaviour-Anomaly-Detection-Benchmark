@@ -46,7 +46,7 @@ if __name__ == '__main__':
     ax2 = plot_pc_timeline(df, function_ranges)
     
     plt.show()
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     
     
     
