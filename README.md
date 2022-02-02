@@ -14,12 +14,13 @@ We can compare contents of both files by running:
 
 ![](./images/histogram.png)    
 ![](./images/timeline.png)    
-![](./images/unique_transitions.png)    
 
 So far only the "unique transitions" detection method is implemented. We can see its results by running:  
 ```bash
 ./scripts/compare_classification_methods.py --normal-pc log_files/stack-mission_riscv64_normal_mimic_payload.pc --abnormal-pc log_files/stack-mission_riscv64_compromised.pc  --function-ranges log_files/stack-mission_riscv64_llvm_objdump_ranges.json
 ```  
+
+![](./images/unique_transitions.png)    
 
 ### Prerequisites
 python3 with pandas, numpy, matplotlib
