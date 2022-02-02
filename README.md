@@ -14,6 +14,7 @@ We can compare contents of both files by running:
 
 ![](./images/histogram.png)    
 ![](./images/timeline.png)    
+![](./images/unique_transitions.png)    
 
 So far only the "unique transitions" detection method is implemented. We can see its results by running:  
 ```bash
