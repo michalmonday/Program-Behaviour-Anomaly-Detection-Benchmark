@@ -4,3 +4,4 @@ cheribuld
 cheri-exercises
 log_files/*.log
 log_files/log_archive/*.log
+**/__pycache__
