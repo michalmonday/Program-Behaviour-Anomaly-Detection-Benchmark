@@ -18,7 +18,7 @@ So far only the "unique transitions" detection method is implemented. We can see
 ```  
 
 ### Prerequisites
-python3 with pandas, numpy
+python3 with pandas, numpy, matplotlib
 
 
 
