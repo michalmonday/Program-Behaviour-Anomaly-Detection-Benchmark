@@ -14,6 +14,8 @@ from tensorflow.keras.models import Model
 import glob
 from copy import deepcopy
 
+from utils import read_pc_values
+
 def read_files(names):
     """ Returns dictionary where
         keys = file names
@@ -21,9 +23,8 @@ def read_files(names):
     data = {}
     try: 
         for name in names:
-            with open(name) as f:
-                short_name = name.split('/')[-1] #name.split('/')[-1].split('.')[0]
-                data[short_name] = [int(line.rstrip(), 16) for line in f.readlines()]
+            short_name = name.split('/')[-1] #name.split('/')[-1].split('.')[0]
+            data[short_name] = read_pc_values(f)
     except Exception as e:
         print(e)
         import pdb; pdb.set_trace()

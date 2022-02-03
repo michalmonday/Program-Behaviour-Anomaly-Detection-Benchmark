@@ -1,15 +1,17 @@
 import pandas as pd
 import numpy as np
 
-def read_pc_values(f):
-    with f:
+def read_pc_values(f_name):
+    with open(f_name) as f:
         return [int(line.strip(), 16) for line in f.readlines() if line]
 
 def df_from_pc_files(f_list, column_prefix=''):
+    if type(f_list[0]) != str:
+        f_list = [item.name for item in f_list]
     all_pc = []
-    for f in f_list:
-        all_pc.append( read_pc_values(f) )
-    df = pd.DataFrame(all_pc, dtype=np.uint64, index=[column_prefix + f.name for f in f_list]).T
+    for f_name in f_list:
+        all_pc.append( read_pc_values(f_name) )
+    df = pd.DataFrame(all_pc, dtype=np.uint64, index=[column_prefix + f_name for f in f_list]).T
     return df
 
 def plot_pc_histogram(df, function_ranges={}, bins=100, function_line_width=0.7, title='Histogram of program counters (frequency distribution)'):
