@@ -11,8 +11,28 @@ def df_from_pc_files(f_list, column_prefix=''):
     all_pc = []
     for f_name in f_list:
         all_pc.append( read_pc_values(f_name) )
-    df = pd.DataFrame(all_pc, dtype=np.uint64, index=[column_prefix + f_name for f in f_list]).T
+
+    def short_name(f_name):
+        return f_name.split('/')[-1] 
+
+    column_names = [column_prefix + short_name(f_name) for f in f_list]
+    df = pd.DataFrame(all_pc, dtype=np.uint64, index=column_names).T
     return df
+
+# value that will separate program counters of different programs
+# after they're stacked together
+separator_value = 123456789
+
+def multiple_files_df_program_counters_to_sliding_windows(df, window_size):
+    # add NaN row to each column (to avoid recognizing the last PC of 1 run as first PC of 2nd run)
+    df = df.append(pd.Series(), ignore_index=True)
+    df.iloc[-1] = separator_value
+    # stack all columns on top of each other
+    df = df.melt(value_name='all_pc').drop('variable',1)
+    df = df.dropna()
+    # import pdb; pdb.set_trace()
+    windows = pd.DataFrame( [ w.to_list() for w in df['all_pc'].rolling(window=window_size) if separator_value not in w.to_list() and len(w.to_list()) == window_size] )#.reshape(-1, window_size)
+    return windows
 
 def plot_pc_histogram(df, function_ranges={}, bins=100, function_line_width=0.7, title='Histogram of program counters (frequency distribution)'):
     ax = df.plot.hist(bins=bins, alpha=1/df.shape[1], title=title)

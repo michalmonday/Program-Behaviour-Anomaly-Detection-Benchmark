@@ -78,6 +78,8 @@ def unique_transitions(df):
         - get unique pairs from 2 columns
     '''
     # add NaN row to each column (to avoid recognizing the last PC of 1 run as first PC of 2nd run)
+    # later "df.dropna()" will just remove these, fixing the problem arising from stacking
+    # program counters from multiple files on each other
     df = df.append(pd.Series(), ignore_index=True)
     # stack all columns on top of each other
     df = df.melt(value_name='all_pc').drop('variable',1)
