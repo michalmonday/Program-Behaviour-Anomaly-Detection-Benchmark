@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3.7
 # coding: utf-8
 
 import numpy as np
@@ -36,6 +36,9 @@ init_settings_i_dont_know()
 
 normal_f_names = list(glob.glob('../../log_files/*normal*pc'))
 anomaly_f_names = list(glob.glob('../../log_files/*compromised*pc'))
+
+# normal_f_names = list(glob.glob('../../log_files/*mimic*pc'))
+# anomaly_f_names = list(glob.glob('../../log_files/*normal.pc'))
 
 # use first files only just for simplicity 
 # npc = df_from_pc_files(normal_f_names).iloc[:,0]
@@ -159,9 +162,12 @@ results_df['anomaly'] = results_df.loss > results_df.threshold
 # results_df[['train_loss', 'test_loss', 'threshold', 'anomaly']].plot()
 
 ax = results_df[['loss']].plot()
+ax.set_title('Reconstruction error of each window in compromised program')
 ax.set_xlabel('Index of sliding window')
 ax.set_ylabel('Window reconstruction error (big error = probably anomaly)')
-ax.axvline(results_df.index.values[4905-window_size], color='k', linestyle='--')
+# ax.axvline(results_df.index.values[4905-window_size], color='k', linestyle='--')
+ax.axhline(THRESHOLD, color='r', label='Threshold')#, linestyle='--')
+ax.axvline(results_df.index.values[4905-window_size], color='k', linestyle='--', label='normal vs abnormal')
 plt.show()
 
 #plt.plot(results_df.index, results_df.loss, label='loss')
@@ -180,6 +186,7 @@ plt.plot(
 )
 ax = plt.gca()
 ax.axvline(results_df.index.values[4905], color='k', linestyle='--')
+ax.set_title('Results (anomalies are marked on PC timeline if found)')
 ax.set_xlabel('Instruction index')
 ax.set_ylabel('Program counter value (address)')
 ax.get_yaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
