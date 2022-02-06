@@ -26,11 +26,4 @@ So far only the "unique transitions" detection method is implemented. We can see
 python3 with pandas, numpy, matplotlib
 
 
-### Todo
-1. Integrate LSTM autoencoder into compare_classification_methods.py.  
-2. Show how "unique transitions" method doesn't work when load address is different (e.g. add 0x400000 to each program counter in test example).  
-3. Turn program counters into relative ones (not from begining, but from the last counter value). For example:
-1,2,3 would turn into 0,1,1.  
-1,3,2 would turn into 0,2,-1.
-
 

@@ -88,34 +88,34 @@ def detect(df_n, df_a, window_size=20, epochs=10):
     y_test = produce_y( X_test )
     X_test = np.array( X_test[:-1] ).reshape(-1, window_size, 1)
 
-    # model = keras.Sequential()
-    # model.add(keras.layers.LSTM(
-    #     units=64, 
-    #     input_shape=(X_train.shape[1], X_train.shape[2])
-    # ))
-    # model.add(keras.layers.Dropout(rate=0.2))
-    # model.add(keras.layers.RepeatVector(n=X_train.shape[1]))
-    # model.add(keras.layers.LSTM(units=64, return_sequences=True))
-    # model.add(keras.layers.Dropout(rate=0.2))
-    # model.add(keras.layers.TimeDistributed(keras.layers.Dense(units=X_train.shape[2])))
-    # model.compile(loss='mae', optimizer='adam')
-
-
     model = keras.Sequential()
-    model.add(keras.layers.LSTM(128, activation='relu', input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=True))
-    model.add(keras.layers.LSTM(64, activation='relu', return_sequences=False))
+    model.add(keras.layers.LSTM(
+        units=64, 
+        input_shape=(X_train.shape[1], X_train.shape[2])
+    ))
+    model.add(keras.layers.Dropout(rate=0.2))
     model.add(keras.layers.RepeatVector(n=X_train.shape[1]))
-    model.add(keras.layers.LSTM(64, activation='relu', return_sequences=True))
-    model.add(keras.layers.LSTM(128, activation='relu', return_sequences=True))
+    model.add(keras.layers.LSTM(units=64, return_sequences=True))
+    model.add(keras.layers.Dropout(rate=0.2))
     model.add(keras.layers.TimeDistributed(keras.layers.Dense(units=X_train.shape[2])))
-    model.compile(optimizer='adam', loss='mse')
+    model.compile(loss='mae', optimizer='adam')
+
+
+    # model = keras.Sequential()
+    # model.add(keras.layers.LSTM(128, activation='relu', input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=True))
+    # model.add(keras.layers.LSTM(64, activation='relu', return_sequences=False))
+    # model.add(keras.layers.RepeatVector(n=X_train.shape[1]))
+    # model.add(keras.layers.LSTM(64, activation='relu', return_sequences=True))
+    # model.add(keras.layers.LSTM(128, activation='relu', return_sequences=True))
+    # model.add(keras.layers.TimeDistributed(keras.layers.Dense(units=X_train.shape[2])))
+    # model.compile(optimizer='adam', loss='mse')
 
     # model.compile(loss=root_mean_squared_error, optimizer='rmsprop')
 
     # import pdb; pdb.set_trace()
 
     history = model.fit(
-        X_train, X_train,#y_train,
+        X_train, y_train, #X_train
         epochs=epochs,
         batch_size=5000,#32,
         validation_split=0.1,

@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 
-def read_pc_values(f_name, relative_pc=False, ignore_non_jumps=False):
+def read_pc_values(f_name, relative_pc=False, ignore_non_jumps=False, load_address=0):
     with open(f_name) as f:
-        pcs = [int(line.strip(), 16) for line in f.readlines() if line]
+        pcs = [int(line.strip(), 16) + load_address for line in f.readlines() if line]
 
     # IGNORE_NON_JUMP AND RELATIVE_PC OPTIONS COMBINED TOGETHER CREATE 
     # THE QUESTION: SHOULD RELATIVE PC BE RELATIVE TO ANY LAST PC OR THE LAST 
@@ -21,12 +21,12 @@ def read_pc_values(f_name, relative_pc=False, ignore_non_jumps=False):
         pcs = relative_from_absolute_pc(pcs)
     return pcs
 
-def df_from_pc_files(f_list, column_prefix='', relative_pc=False, ignore_non_jumps=False):
+def df_from_pc_files(f_list, column_prefix='', relative_pc=False, ignore_non_jumps=False, load_address=0):
     if type(f_list[0]) != str:
         f_list = [item.name for item in f_list]
     all_pc = []
     for f_name in f_list:
-        pc_chunk = read_pc_values(f_name, relative_pc=relative_pc, ignore_non_jumps=ignore_non_jumps) 
+        pc_chunk = read_pc_values(f_name, relative_pc=relative_pc, ignore_non_jumps=ignore_non_jumps, load_address=load_address) 
         all_pc.append(pc_chunk)
 
     def short_name(f_name):

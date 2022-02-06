@@ -70,6 +70,16 @@ parser.add_argument(
         help='For how many epochs to train LSTM autoencoder method (+ possibly others in future'
         )
 
+parser.add_argument(
+        '--abnormal-load-address',
+        required=False,
+        type=int,
+        default=0,
+        metavar='',
+        help=('Specified value will be added to every program counter'
+              ' (to pretend that the program was loaded at different offset,'
+              ' making the detection more difficult and realistic).')
+        )
 
 args = parser.parse_args()
 
@@ -94,8 +104,10 @@ from unique_transitions import unique_transitions
 if __name__ == '__main__':
     # function_ranges are used just for plotting
     function_ranges = json.load(args.function_ranges) if args.function_ranges else {}
+
+    # load program counter values from files
     df_n = df_from_pc_files(args.normal_pc, column_prefix='normal: ', relative_pc=args.relative_pc, ignore_non_jumps=args.ignore_non_jumps)
-    df_a = df_from_pc_files(args.abnormal_pc, column_prefix='abnormal: ', relative_pc=args.relative_pc, ignore_non_jumps=args.ignore_non_jumps)
+    df_a = df_from_pc_files(args.abnormal_pc, column_prefix='abnormal: ', relative_pc=args.relative_pc, ignore_non_jumps=args.ignore_non_jumps, load_address=args.abnormal_load_address)
 
     # plot training (normal pc) and testing (abnormal/compromised pc) data
     fig, axs = plt.subplots(2)
