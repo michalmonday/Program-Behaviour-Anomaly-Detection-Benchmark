@@ -4,7 +4,9 @@
 # Example run:
 ./% --normal-pc ../log_files/stack-mission_riscv64_normal.pc --abnormal-pc ../log_files/stack-mission_riscv64_compromised.pc --function-ranges ../log_files/stack-missi on_riscv64_llvm_objdump_ranges.json
 
-./% -n ../log_files/*normal*pc -a ../log_files/*compr*pc -fr ../log_files/*json --relative-pc --window-size 20 --epochs 50
+!./% -n ../log_files/*normal*pc -a ../log_files/*compr*pc -fr ../log_files/*json --window-size 10 --epochs 50
+
+!./% -n ../log_files/*normal*pc -a ../log_files/*compr*pc -fr ../log_files/*json --window-size 10 --epochs 50 --ignore-non-jumps --abnormal-load-address 4 --relative-pc
 '''
 
 
