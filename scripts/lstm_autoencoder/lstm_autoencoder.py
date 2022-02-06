@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 import pandas as pd
-import seaborn as sns
+# import seaborn as sns
 from pylab import rcParams
 import matplotlib.pyplot as plt
 from matplotlib import rc
@@ -40,7 +40,7 @@ def produce_y(X_windows):
         ys.append(window[-1]) 
     return np.array(ys)
 
-def detect_by_lstm_autoencoder(df_n, df_a, window_size=20):
+def detect(df_n, df_a, window_size=20):
     # for training data duplicate windows are dropped
     # it greatly improves training times
     X_train = utils.multiple_files_df_program_counters_to_sliding_windows(df_n, window_size).drop_duplicates().values
@@ -133,6 +133,43 @@ def detect_by_lstm_autoencoder(df_n, df_a, window_size=20):
     return results_df, anomalies
 
 
+def plot_results(df_a, results_df, anomalies_df, window_size, fig_title='', function_ranges={}):
+    fig, axs = plt.subplots(2)
+    # fig.subplots_adjust(top=0.92, hspace=0.43)
+    fig.subplots_adjust(hspace=0.43, top=0.835)
+    if fig_title:
+        fig.suptitle(fig_title, fontsize=20)
+    ax = results_df[['loss']].plot(ax=axs[0], color='purple', linewidth=0.7)
+    # markers to show distinct points
+    results_df[['loss']].plot(ax=axs[0], marker='h', markersize=1, linestyle='none', legend=None)
+
+    ax.set_title(f'Reconstruction error of each window (size={window_size}) in compromised program')
+    ax.set_xlabel('Index of sliding window')
+    ax.set_ylabel('Window reconstruction error')
+    ax.legend().remove()
+
+    threshold = results_df['threshold'].iloc[0]
+    ax.axhline(threshold, color='r', label='Threshold')#, linestyle='--')
+    ax_t = ax.twinx()
+    ax_t.set_yticks([threshold])
+    ax_t.set_yticklabels(['Threshold'], fontdict={'fontsize':7})
+    ax_t.set_ylim(*ax.get_ylim())
+    ax_t.legend().remove()
+    ax.axvline(results_df.index.values[4905-window_size], color='k', linestyle='--', label='normal vs abnormal')
+    plot_pc_timeline(df_a, ax=axs[1], function_ranges=function_ranges)
+    # draw line to show where abnormal values actually were
+    axs[1].axvline(results_df.index.values[4905], color='k', linestyle='--')
+    axs[1].set_title(f'Results ({anomalies_df.shape[0]} anomalous windows were detected)')
+    axs[1].set_xlabel('Instruction index')
+    axs[1].set_ylabel('Program counter (address)')
+    axs[1].get_yaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
+    # draw anomaly region highlights
+    for i, row in anomalies_df.iterrows():
+        axs[1].axvspan(row['window_start'], row['window_end'], color='red', alpha=0.15)
+    # draw stars
+    df_a.iloc[ anomalies_df['window_end'] ].plot(ax=axs[1], color='r', marker='*', markersize=10, linestyle='none', legend=None)
+
+
 
 if __name__ == '__main__':
     window_size = 20
@@ -152,98 +189,11 @@ if __name__ == '__main__':
     df_n = df_from_pc_files(normal_f_names) 
     df_a = df_from_pc_files(anomaly_f_names)
 
-    results_df, anomalies = detect_by_lstm_autoencoder(df_n, df_a, window_size=window_size)
-    fig, axs = plt.subplots(2)
-    fig.subplots_adjust(top=0.92, hspace=0.43)
-    ax = results_df[['loss']].plot(ax=axs[0], color='purple', linewidth=0.7)
-    # markers to show distinct points
-    results_df[['loss']].plot(ax=axs[0], marker='h', markersize=1, linestyle='none', legend=None)
-
-    ax.set_title('Reconstruction error of each window in compromised program')
-    ax.set_xlabel('Index of sliding window')
-    ax.set_ylabel('Window reconstruction error')
-    ax.legend().remove()
-
-    # ax.axvline(results_df.index.values[4905-window_size], color='k', linestyle='--')
-
-    threshold = results_df['threshold'].iloc[0]
-    ax.axhline(threshold, color='r', label='Threshold')#, linestyle='--')
-    ax_t = ax.twinx()
-    ax_t.set_yticks([threshold])
-    ax_t.set_yticklabels(['Threshold'], fontdict={'fontsize':7})
-    ax_t.set_ylim(*ax.get_ylim())
-    ax_t.legend().remove()
-
-    ax.axvline(results_df.index.values[4905-window_size], color='k', linestyle='--', label='normal vs abnormal')
-
-    # axs[1].plot(
-    #   df_a[window_size:].index, 
-    #   df_a[window_size:].values
-    # )
-
-    # df_a[window_size:].plot(ax=axs[1])
-    plot_pc_timeline(df_a, ax=axs[1])
-
-    # draw line to show where abnormal values actually were
-    axs[1].axvline(results_df.index.values[4905], color='k', linestyle='--')
-    axs[1].set_title('Results (anomalies are marked on PC timeline if found)')
-    axs[1].set_xlabel('Instruction index')
-    axs[1].set_ylabel('Program counter (address)')
-    axs[1].get_yaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
-
-    # draw anomaly region highlights
-    for i, row in anomalies.iterrows():
-        axs[1].axvspan(row['window_start'], row['window_end'], color='red', alpha=0.15)
-
-    # draw stars
-    df_a.iloc[ anomalies['window_end'] ].plot(ax=axs[1], color='r', marker='*', markersize=10, linestyle='none', legend=None)
-
-    # import pdb; pdb.set_trace()
-    # anomalies.plot( ax=axs[1])
-
-    #sns.scatterplot( anomalies.index + window_size,
-    #  df_a.iloc[anomalies.index + window_size].values.reshape(-1),
-    #  color=sns.color_palette()[3],
-    #  s=52,
-    #  label='anomaly'
-    #)
-    plt.xticks(rotation=25)
-    plt.legend();
+    results_df, anomalies_df = detect(df_n, df_a, window_size=window_size)
+    plot_results(df_a, results_df, anomalies_df, window_size)
+    # plt.legend();
     plt.show()
 
     # normal_f_names = list(glob.glob('../../log_files/*mimic*pc'))
     # anomaly_f_names = list(glob.glob('../../log_files/*normal.pc'))
 
-
-
-# df = pd.read_csv('spx.csv', parse_dates=['date'], index_col='date')
-# df.head()
-# plt.plot(df, label='close price')
-# plt.legend()
-# plt.show()
-# train_size = int(len(df) * 0.95)
-# test_size = len(df) - train_size
-# train, test = df.iloc[0:train_size], df.iloc[train_size:len(df)]
-# print(train.shape, test.shape)
-# from sklearn.preprocessing import StandardScaler
-# scaler = StandardScaler()
-# scaler = scaler.fit(train[['close']])
-# train['close'] = scaler.transform(train[['close']])
-# test['close'] = scaler.transform(test[['close']])
-
-# plt.plot(
-#   df_a[window_size:].index, 
-#   scaler.inverse_transform(test[window_size:].close.values.reshape(1,-1)).reshape(-1), 
-#   label='close price'
-# );
-
-# sns.scatterplot(
-#   anomalies.index,
-#   scaler.inverse_transform(anomalies.close.values.reshape(1,-1)).reshape(-1),
-#   color=sns.color_palette()[3],
-#   s=52,
-#   label='anomaly'
-# )
-# plt.xticks(rotation=25)
-# plt.legend();
-# plt.show()
