@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python3.7
 
 # Example run:
 # !./% --normal-pc ../log_files/stack-mission_riscv64_normal.pc --abnormal-pc ../log_files/stack-mission_riscv64_compromised.pc --function-ranges ../log_files/stack-missi on_riscv64_llvm_objdump_ranges.json
@@ -45,6 +45,10 @@ import sys
 import json
 
 from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files
+from lstm_autoencoder import time_series_anomaly_detection
+# import time_series_anomaly_detection
+exit()
+
 # ax = plot_pc_histogram(df, function_ranges, bins=100)
 # ax2 = plot_pc_timeline(df, function_ranges)
 # df = df_from_pc_files(f_list)
@@ -117,6 +121,8 @@ if __name__ == '__main__':
 
     detected_ut, df_a_detected_points = detect_by_unique_transitions(df_n, df_a)
     df_a_detected_points.plot(ax=ax2, color='r', marker='*', markersize=10, linestyle='none', legend=None)
+
+    
 
     plt.show()
     
