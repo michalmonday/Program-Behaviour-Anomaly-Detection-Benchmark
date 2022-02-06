@@ -1,10 +1,12 @@
 #!/usr/bin/python3.7
 
+'''
 # Example run:
-# !./% --normal-pc ../log_files/stack-mission_riscv64_normal.pc --abnormal-pc ../log_files/stack-mission_riscv64_compromised.pc --function-ranges ../log_files/stack-missi on_riscv64_llvm_objdump_ranges.json
-# !./% -n *normal*pc -a *compr*pc -fr *json 
+./% --normal-pc ../log_files/stack-mission_riscv64_normal.pc --abnormal-pc ../log_files/stack-mission_riscv64_compromised.pc --function-ranges ../log_files/stack-missi on_riscv64_llvm_objdump_ranges.json
 
-# ./% -n ../log_files/*normal*pc -a ../log_files/*compr*pc -fr ../log_files/*json
+./% -n ../log_files/*normal*pc -a ../log_files/*compr*pc -fr ../log_files/*json --relative-pc --window-size 20 --epochs 50
+'''
+
 
 import argparse
 parser = argparse.ArgumentParser()
@@ -36,6 +38,39 @@ parser.add_argument(
         help='File name containing output of extract_function_ranges_from_llvm_objdump.py'
         )
 
+parser.add_argument(
+        '--relative-pc',
+        required=False,
+        action='store_true',
+        help='Converts absolute program counter values into relative ones.'
+        )
+
+parser.add_argument(
+        '--ignore-non-jumps',
+        required=False,
+        action='store_true',
+        help='Ignores PC counter values that were likely not to be result of a jump (if previous counter value was not different by more than 4, then value will be ignored, in both: training and testing data)'
+        )
+
+parser.add_argument(
+        '--window-size',
+        required=False,
+        type=int,
+        default=20,
+        metavar='',
+        help='Window size used for LSTM autoencoder method (+ possibly others in future'
+        )
+
+parser.add_argument(
+        '--epochs',
+        required=False,
+        type=int,
+        default=10,
+        metavar='',
+        help='For how many epochs to train LSTM autoencoder method (+ possibly others in future'
+        )
+
+
 args = parser.parse_args()
 
 import re
@@ -59,8 +94,8 @@ from unique_transitions import unique_transitions
 if __name__ == '__main__':
     # function_ranges are used just for plotting
     function_ranges = json.load(args.function_ranges) if args.function_ranges else {}
-    df_n = df_from_pc_files(args.normal_pc, column_prefix='normal: ')
-    df_a = df_from_pc_files(args.abnormal_pc, column_prefix='abnormal: ')
+    df_n = df_from_pc_files(args.normal_pc, column_prefix='normal: ', relative_pc=args.relative_pc, ignore_non_jumps=args.ignore_non_jumps)
+    df_a = df_from_pc_files(args.abnormal_pc, column_prefix='abnormal: ', relative_pc=args.relative_pc, ignore_non_jumps=args.ignore_non_jumps)
 
     # plot training (normal pc) and testing (abnormal/compromised pc) data
     fig, axs = plt.subplots(2)
@@ -76,11 +111,9 @@ if __name__ == '__main__':
     ax3 = plot_pc_timeline(df_a, function_ranges, title='UNIQUE TRANSITIONS METHOD RESULTS')
     df_a_detected_points.plot(ax=ax3, color='r', marker='*', markersize=10, linestyle='none', legend=None)
 
-
     # LSTM autoencoder
-    window_size = 20
-    results_df, anomalies_df = lstm_autoencoder.detect(df_n, df_a, window_size=window_size)
-    lstm_autoencoder.plot_results(df_a, results_df, anomalies_df, window_size, fig_title = 'LSTM AUTOENCODER RESULTS', function_ranges=function_ranges)
+    results_df, anomalies_df = lstm_autoencoder.detect(df_n, df_a, window_size=args.window_size, epochs=args.epochs)
+    lstm_autoencoder.plot_results(df_a, results_df, anomalies_df, args.window_size, fig_title = 'LSTM AUTOENCODER RESULTS', function_ranges=function_ranges)
 
     plt.show()
     

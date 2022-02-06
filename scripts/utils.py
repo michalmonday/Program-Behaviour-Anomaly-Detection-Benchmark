@@ -1,23 +1,56 @@
 import pandas as pd
 import numpy as np
 
-def read_pc_values(f_name):
+def read_pc_values(f_name, relative_pc=False, ignore_non_jumps=False):
     with open(f_name) as f:
-        return [int(line.strip(), 16) for line in f.readlines() if line]
+        pcs = [int(line.strip(), 16) for line in f.readlines() if line]
 
-def df_from_pc_files(f_list, column_prefix=''):
+    # IGNORE_NON_JUMP AND RELATIVE_PC OPTIONS COMBINED TOGETHER CREATE 
+    # THE QUESTION: SHOULD RELATIVE PC BE RELATIVE TO ANY LAST PC OR THE LAST 
+    # NON-JUMP PC
+    if ignore_non_jumps:
+        # [0] is inserted at the begining of relative pcs so the length matches
+        rel_pcs = [0] + relative_from_absolute_pc(pcs)
+        if relative_pc:
+            return [rel_pc for rel_pc in rel_pcs if abs(int(rel_pc)) > 4]
+        else:
+            return [pc for pc,rel_pc in zip(pcs, rel_pcs) if abs(int(rel_pc)) > 4]
+        # rel_pcs = [0] + relative_from_absolute_pc(pcs)
+        # return [pc for pc,rel_pc in zip(pcs, rel_pcs) if abs(int(rel_pc)) > 4]
+    if relative_pc:
+        pcs = relative_from_absolute_pc(pcs)
+    return pcs
+
+def df_from_pc_files(f_list, column_prefix='', relative_pc=False, ignore_non_jumps=False):
     if type(f_list[0]) != str:
         f_list = [item.name for item in f_list]
     all_pc = []
     for f_name in f_list:
-        all_pc.append( read_pc_values(f_name) )
+        pc_chunk = read_pc_values(f_name, relative_pc=relative_pc, ignore_non_jumps=ignore_non_jumps) 
+        all_pc.append(pc_chunk)
 
     def short_name(f_name):
         return f_name.split('/')[-1] 
 
     column_names = [column_prefix + short_name(f_name) for f in f_list]
-    df = pd.DataFrame(all_pc, dtype=np.uint64, index=column_names).T
+    df = pd.DataFrame(all_pc, dtype=np.int64, index=column_names).T
     return df
+
+def relative_from_absolute_pc(pc_collection):
+    ''' Turn program counters into relative ones (not from begining, 
+        but from the last counter value). For example:
+        1,2,3 would turn into 0,1,1
+        1,3,2 would turn into 0,2,-1 '''
+    if type(pc_collection) == list:
+        return [pc_collection[i+1] - pc for i,pc in enumerate(pc_collection[:-1])]
+    raise Exception('relative_from_absolute_pc only accepts a list as an input.')
+    # if dataframe
+    # import pdb; pdb.set_trace()
+    # return pc_collection.diff()
+
+
+
+    
 
 # value that will separate program counters of different programs
 # after they're stacked together
@@ -89,3 +122,4 @@ def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7, ax=None, t
     ax2_t.set_ylim(*ax2.get_ylim())
     df.plot(ax=ax2, marker='h', markersize=1, linestyle='none', legend=None)
     return ax2
+

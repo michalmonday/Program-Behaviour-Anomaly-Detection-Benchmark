@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from matplotlib import rc
 from pandas.plotting import register_matplotlib_converters
 import glob
+# from livelossplot import PlotLossesKeras
 
 import os
 import sys
@@ -21,6 +22,7 @@ sys.path.insert(0, parentdir)
 import utils
 from copy import deepcopy
 from utils import read_pc_values, df_from_pc_files, plot_pc_timeline
+
 
 def init_settings_i_dont_know():
     register_matplotlib_converters()
@@ -40,7 +42,23 @@ def produce_y(X_windows):
         ys.append(window[-1]) 
     return np.array(ys)
 
-def detect(df_n, df_a, window_size=20):
+# def temporalize(X, y, lookback):
+#     output_X = []
+#     output_y = []
+#     for i in range(len(X)-lookback-1):
+#         t = []
+#         for j in range(1,lookback+1):
+#             # Gather past records upto the lookback period
+#             t.append(X[[(i+j+1)], :])
+#         output_X.append(t)
+#         output_y.append(y[i+lookback+1])
+#     return output_X, output_y
+
+from keras import backend as K
+def root_mean_squared_error(y_true, y_pred):
+        return K.sqrt(K.mean(K.square(y_pred - y_true)))
+
+def detect(df_n, df_a, window_size=20, epochs=10):
     # for training data duplicate windows are dropped
     # it greatly improves training times
     X_train = utils.multiple_files_df_program_counters_to_sliding_windows(df_n, window_size).drop_duplicates().values
@@ -70,30 +88,46 @@ def detect(df_n, df_a, window_size=20):
     y_test = produce_y( X_test )
     X_test = np.array( X_test[:-1] ).reshape(-1, window_size, 1)
 
+    # model = keras.Sequential()
+    # model.add(keras.layers.LSTM(
+    #     units=64, 
+    #     input_shape=(X_train.shape[1], X_train.shape[2])
+    # ))
+    # model.add(keras.layers.Dropout(rate=0.2))
+    # model.add(keras.layers.RepeatVector(n=X_train.shape[1]))
+    # model.add(keras.layers.LSTM(units=64, return_sequences=True))
+    # model.add(keras.layers.Dropout(rate=0.2))
+    # model.add(keras.layers.TimeDistributed(keras.layers.Dense(units=X_train.shape[2])))
+    # model.compile(loss='mae', optimizer='adam')
+
+
     model = keras.Sequential()
-    model.add(keras.layers.LSTM(
-        units=64, 
-        input_shape=(X_train.shape[1], X_train.shape[2])
-    ))
-    model.add(keras.layers.Dropout(rate=0.2))
+    model.add(keras.layers.LSTM(128, activation='relu', input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=True))
+    model.add(keras.layers.LSTM(64, activation='relu', return_sequences=False))
     model.add(keras.layers.RepeatVector(n=X_train.shape[1]))
-    model.add(keras.layers.LSTM(units=64, return_sequences=True))
-    model.add(keras.layers.Dropout(rate=0.2))
+    model.add(keras.layers.LSTM(64, activation='relu', return_sequences=True))
+    model.add(keras.layers.LSTM(128, activation='relu', return_sequences=True))
     model.add(keras.layers.TimeDistributed(keras.layers.Dense(units=X_train.shape[2])))
-    model.compile(loss='mae', optimizer='adam')
+    model.compile(optimizer='adam', loss='mse')
+
+    # model.compile(loss=root_mean_squared_error, optimizer='rmsprop')
+
+    # import pdb; pdb.set_trace()
 
     history = model.fit(
-        X_train, y_train,
-        epochs=10,
+        X_train, X_train,#y_train,
+        epochs=epochs,
         batch_size=5000,#32,
         validation_split=0.1,
-        shuffle=False
+        shuffle=True
+        # callbacks=[PlotLossesKeras()]
     )
 
-    # plt.plot(history.history['loss'], label='train')
-    # plt.plot(history.history['val_loss'], label='test')
-    # plt.legend();
-    # plt.show()
+    #plt.show()
+    #plt.plot(history.history['loss'], label='train')
+    #plt.plot(history.history['val_loss'], label='test')
+    #plt.legend();
+    #plt.show()
 
     X_train_pred = model.predict(X_train)
 
@@ -155,10 +189,11 @@ def plot_results(df_a, results_df, anomalies_df, window_size, fig_title='', func
     ax_t.set_yticklabels(['Threshold'], fontdict={'fontsize':7})
     ax_t.set_ylim(*ax.get_ylim())
     ax_t.legend().remove()
-    ax.axvline(results_df.index.values[4905-window_size], color='k', linestyle='--', label='normal vs abnormal')
+    # draw line to show where abnormal values actually were
+    # ax.axvline(results_df.index.values[4905-window_size], color='k', linestyle='--', label='normal vs abnormal')
     plot_pc_timeline(df_a, ax=axs[1], function_ranges=function_ranges)
     # draw line to show where abnormal values actually were
-    axs[1].axvline(results_df.index.values[4905], color='k', linestyle='--')
+    # axs[1].axvline(results_df.index.values[4905-window_size], color='k', linestyle='--')
     axs[1].set_title(f'Results ({anomalies_df.shape[0]} anomalous windows were detected)')
     axs[1].set_xlabel('Instruction index')
     axs[1].set_ylabel('Program counter (address)')
