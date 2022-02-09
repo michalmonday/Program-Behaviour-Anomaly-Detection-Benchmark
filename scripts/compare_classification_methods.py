@@ -83,8 +83,19 @@ parser.add_argument(
               ' making the detection more difficult and realistic).')
         )
 
+parser.add_argument(
+        '--transition-sequence-size',
+        required=False,
+        type=int,
+        default=2,
+        metavar='',
+        help='How many program counter transitions to take into account for "unique transitions" method (2 by default)'
+        )
+
 args = parser.parse_args()
 
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 import re
 import numpy as np
 import pandas as pd
@@ -93,37 +104,29 @@ import matplotlib.ticker as ticker
 import sys
 import json
 
-from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files
+from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files, plot_vspans
 from lstm_autoencoder import lstm_autoencoder
 from unique_transitions import unique_transitions
 
-# ax = plot_pc_histogram(df, function_ranges, bins=100)
-# ax2 = plot_pc_timeline(df, function_ranges)
-# df = df_from_pc_files(f_list)
-# pc = read_pc_values(f)
-
 
 if __name__ == '__main__':
-    # function_ranges are used just for plotting
+    # Load function_ranges (used just for plotting)
     function_ranges = json.load(args.function_ranges) if args.function_ranges else {}
-
-    # load program counter values from files
+    # Load program counter values from files
     df_n = df_from_pc_files(args.normal_pc, column_prefix='normal: ', relative_pc=args.relative_pc, ignore_non_jumps=args.ignore_non_jumps)
     df_a = df_from_pc_files(args.abnormal_pc, column_prefix='abnormal: ', relative_pc=args.relative_pc, ignore_non_jumps=args.ignore_non_jumps, load_address=args.abnormal_load_address)
-
-    # plot training (normal pc) and testing (abnormal/compromised pc) data
+    # Plot training (normal pc) and testing (abnormal/compromised pc) data
     fig, axs = plt.subplots(2)
-    # fig.subplots_adjust(top=0.92, hspace=0.43)
     fig.subplots_adjust(hspace=0.43, top=0.835)
     fig.suptitle('TRAINING AND TESTING DATA', fontsize=20)
     ax  = plot_pc_timeline(df_n, function_ranges, ax=axs[0], title='Normal program counters - used for training')
     ax2 = plot_pc_timeline(df_a, function_ranges, ax=axs[1], title='Abnormal program counters - used for testing')
 
-    detected_ut, df_a_detected_points = unique_transitions.detect(df_n, df_a)
-    # df_a_detected_points.plot(ax=ax2, color='r', marker='*', markersize=10, linestyle='none', legend=None)
-
+    # Unique transitions
+    detected_ut, df_a_detected_points = unique_transitions.detect(df_n, df_a, n=args.transition_sequence_size)
     ax3 = plot_pc_timeline(df_a, function_ranges, title='UNIQUE TRANSITIONS METHOD RESULTS')
     df_a_detected_points.plot(ax=ax3, color='r', marker='*', markersize=10, linestyle='none', legend=None)
+    plot_vspans(ax3, df_a_detected_points.index.values - args.transition_sequence_size+1, args.transition_sequence_size-1)
 
     # LSTM autoencoder
     results_df, anomalies_df = lstm_autoencoder.detect(df_n, df_a, window_size=args.window_size, epochs=args.epochs)

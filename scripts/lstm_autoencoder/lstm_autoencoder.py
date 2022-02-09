@@ -12,6 +12,7 @@ from matplotlib import rc
 from pandas.plotting import register_matplotlib_converters
 import glob
 # from livelossplot import PlotLossesKeras
+from sklearn.preprocessing import StandardScaler
 
 import os
 import sys
@@ -34,7 +35,17 @@ def init_settings_i_dont_know():
 
 def produce_y(X_windows):
     ''' y is the first program counter value following the last 
-        program counter of a window '''
+        program counter of a window. That's how it was produced in the youtube
+        tutorial:
+        https://www.youtube.com/watch?v=H4J74KstHTE
+
+        However, in another example, "y" was simply X, which is natural
+        for autoencoders:
+        https://towardsdatascience.com/lstm-autoencoder-for-extreme-rare-event-classification-in-keras-ce209a224cfb
+
+        From my observations, training with "y" equal to X produces the same
+        results but takes more time.
+        '''
     ys = []
     for i, window in enumerate(X_windows):
         if i == 0:
@@ -61,11 +72,19 @@ def root_mean_squared_error(y_true, y_pred):
 def detect(df_n, df_a, window_size=20, epochs=10):
     # for training data duplicate windows are dropped
     # it greatly improves training times
-    X_train = utils.multiple_files_df_program_counters_to_sliding_windows(df_n, window_size).drop_duplicates().values
+
+    # scaler = StandardScaler()
+    # melted_df_n = df_n.melt(value_name='all_pc').drop('variable', axis=1).dropna()[['all_pc']].values.reshape(-1,1)
+    # scaler.fit(melted_df_n)
+    # import pdb; pdb.set_trace()
+    # df_n_scaled = df_n.apply(scaler.transform, axis=1)
+    # df_a_scaled = df_a.apply(scaler.transform, axis=1)
+
+    X_train = utils.pc_df_to_sliding_windows(df_n, window_size, unique=True).values
 
     # for testing data speed isn't a problem (predictions are done relatively fast)
     # so duplicates don't have to be dropped (which is good because it wouldn't be good for presenting results)
-    X_test = utils.multiple_files_df_program_counters_to_sliding_windows(df_a, window_size).values
+    X_test = utils.pc_df_to_sliding_windows(df_a, window_size).values
 
     min_val = tf.reduce_min(X_train)
     max_val = tf.reduce_max(X_train)
@@ -73,12 +92,10 @@ def detect(df_n, df_a, window_size=20, epochs=10):
     # normalization for fast gradient descent
     X_train = (X_train - min_val) / (max_val - min_val)
     X_test = (X_test - min_val) / (max_val - min_val)
-
     X_train = tf.cast(X_train, tf.float32)
     X_test = tf.cast(X_test, tf.float32)
 
 # reshape to [samples, window_size, n_features]
-
 # X_train, y_train = create_dataset(train[['close']], train.close, window_size)
 # X_test, y_test = create_dataset(test[['close']], test.close, window_size)
 

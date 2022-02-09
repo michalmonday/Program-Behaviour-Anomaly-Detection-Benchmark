@@ -49,22 +49,34 @@ def relative_from_absolute_pc(pc_collection):
     # return pc_collection.diff()
 
 
-
-    
-
-# value that will separate program counters of different programs
-# after they're stacked together
+# separator_value is a value that will separate program counters of
+# different programs after they're stacked together 
 separator_value = 123456789
+    
+def series_to_sliding_windows(series, window_size):
+    ''' Series may include program counter values from multiple files,
+        in such case these must be separated by the "separator_value" '''
+    windows = pd.DataFrame( [ w.to_list() for w in series.rolling(window=window_size) if separator_value not in w.to_list() and len(w.to_list()) == window_size] )#.reshape(-1, window_size)
+    return windows
 
-def multiple_files_df_program_counters_to_sliding_windows(df, window_size):
-    # add NaN row to each column (to avoid recognizing the last PC of 1 run as first PC of 2nd run)
+def merge_pc_df_columns(df):
+    ''' Creates df with "all_pc" column that contains program counters from 
+        multiple files (columns), separated by the "separator_value" '''
+    # add separator_value row to each column (to avoid recognizing the last PC of 1 run as first PC of 2nd run)
     df = df.append(pd.Series(), ignore_index=True)
     df.iloc[-1] = separator_value
     # stack all columns on top of each other
-    df = df.melt(value_name='all_pc').drop('variable',1)
+    df = df.melt(value_name='all_pc').drop('variable', axis=1)
     df = df.dropna()
-    # import pdb; pdb.set_trace()
-    windows = pd.DataFrame( [ w.to_list() for w in df['all_pc'].rolling(window=window_size) if separator_value not in w.to_list() and len(w.to_list()) == window_size] )#.reshape(-1, window_size)
+    return df
+
+def pc_df_to_sliding_windows(df, window_size, unique=False):
+    ''' df contains a column per each ".pc" file where each row contains
+        program counter values '''
+    df = merge_pc_df_columns(df)
+    windows = series_to_sliding_windows(df['all_pc'], window_size)
+    if unique:
+        windows = windows.drop_duplicates()
     return windows
 
 # def multiple_files_df_program_counters_to_unique_sliding_windows(df, window_size):
@@ -122,4 +134,8 @@ def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7, ax=None, t
     ax2_t.set_ylim(*ax2.get_ylim())
     df.plot(ax=ax2, marker='h', markersize=1, linestyle='none', legend=None)
     return ax2
+
+def plot_vspans(ax, values, size, color='red', alpha=0.15):
+    for i in values:
+        ax.axvspan(i, i+size, color=color, alpha=alpha)
 
