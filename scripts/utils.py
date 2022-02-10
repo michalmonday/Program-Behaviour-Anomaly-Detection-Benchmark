@@ -139,3 +139,35 @@ def plot_vspans(ax, values, size, color='red', alpha=0.15):
     for i in values:
         ax.axvspan(i, i+size, color=color, alpha=alpha)
 
+def plot_vspans_ranges(ax, ranges, color='red', alpha=0.15):
+    for start, end in ranges:
+        ax.axvspan(start, end, color=color, alpha=alpha)
+
+
+def introduce_artificial_anomalies(df):
+    ''' Currently (10/02/22) only single anomalous file is supported.
+        It returns modified dataframe and ranges of indices where
+        anomalies were introduced (so it can be marked on the plot 
+        later with "plot_vspans" for example.  '''
+    col = df.iloc[:,0]
+
+    anomalies_ranges = []
+
+    # EASY TO DETECT
+    #     set values at index 10,11,12,13,14 to random values
+    how_many = 5
+    col[10:10+how_many] = np.random.randint(col.min(), col.max(), how_many)
+    anomalies_ranges.append((10,10+how_many))
+
+    # HARDER TO DETECT
+    #     slightly modify values at index 60,61,62,63,64 
+    #     (by adding or subtracting multiply of 8)
+    col[60:60+how_many] += np.random.randint(-3, 3, how_many) * 8 
+    anomalies_ranges.append((60,60+how_many))
+
+    # HARD TO DETECT
+    #     modify a single value at index 110 by adding 8 to it
+    col[110] += 8
+    anomalies_ranges.append((110, 111))
+    return df, anomalies_ranges
+

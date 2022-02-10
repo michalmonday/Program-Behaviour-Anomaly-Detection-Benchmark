@@ -98,6 +98,14 @@ parser.add_argument(
         metavar='',
         help='How many autoencoder models to use that focus on its own standard deviation range.'
         )
+
+parser.add_argument(
+        '--introduce-artificial-anomalies',
+        required=False,
+        action='store_true',
+        help='Modifies the abnormal files (using utils.introduce_artificial_anomalies function)'
+        )
+
 args = parser.parse_args()
 
 import os
@@ -110,10 +118,13 @@ import matplotlib.ticker as ticker
 import sys
 import json
 
-from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files, plot_vspans
+import utils
+from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files, plot_vspans, plot_vspans_ranges
 from lstm_autoencoder import lstm_autoencoder
 from unique_transitions import unique_transitions
 
+import logging
+logging.getLogger().setLevel(logging.INFO)
 
 if __name__ == '__main__':
     # Load function_ranges (used just for plotting)
@@ -121,6 +132,10 @@ if __name__ == '__main__':
     # Load program counter values from files
     df_n = df_from_pc_files(args.normal_pc, column_prefix='normal: ', relative_pc=args.relative_pc, ignore_non_jumps=args.ignore_non_jumps)
     df_a = df_from_pc_files(args.abnormal_pc, column_prefix='abnormal: ', relative_pc=args.relative_pc, ignore_non_jumps=args.ignore_non_jumps, load_address=args.abnormal_load_address)
+
+    if args.introduce_artificial_anomalies:
+        df_a, anomalies_ranges = utils.introduce_artificial_anomalies(df_a)
+    
     # Plot training (normal pc) and testing (abnormal/compromised pc) data
     fig, axs = plt.subplots(2)
     fig.subplots_adjust(hspace=0.43, top=0.835)
@@ -130,13 +145,15 @@ if __name__ == '__main__':
 
     # Unique transitions
     detected_ut, df_a_detected_points = unique_transitions.detect(df_n, df_a, n=args.transition_sequence_size)
-    ax3 = plot_pc_timeline(df_a, function_ranges, title='UNIQUE TRANSITIONS METHOD RESULTS')
+    ax3 = plot_pc_timeline(df_a, function_ranges, title=f'UNIQUE TRANSITIONS METHOD (n={args.transition_sequence_size}) RESULTS')
     df_a_detected_points.plot(ax=ax3, color='r', marker='*', markersize=10, linestyle='none', legend=None)
-    plot_vspans(ax3, df_a_detected_points.index.values - args.transition_sequence_size+1, args.transition_sequence_size-1)
+    plot_vspans(ax3, df_a_detected_points.index.values - args.transition_sequence_size+1, args.transition_sequence_size-1, color='red')
+    # plot_vspans_ranges(ax3, anomalies_ranges, color='blue')
 
     # LSTM autoencoder
     results_df, anomalies_df = lstm_autoencoder.detect(df_n, df_a, window_size=args.window_size, epochs=args.epochs, number_of_models=args.autoencoder_forest_size)
-    lstm_autoencoder.plot_results(df_a, results_df, anomalies_df, args.window_size, fig_title = 'LSTM AUTOENCODER RESULTS', function_ranges=function_ranges)
+    axs = lstm_autoencoder.plot_results(df_a, results_df, anomalies_df, args.window_size, fig_title = 'LSTM AUTOENCODER RESULTS', function_ranges=function_ranges)
+    # plot_vspans_ranges(axs[1], anomalies_ranges, color='blue')
 
     plt.show()
     

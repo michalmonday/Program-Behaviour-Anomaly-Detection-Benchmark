@@ -23,6 +23,7 @@ sys.path.insert(0, parentdir)
 import utils
 from copy import deepcopy
 from utils import read_pc_values, df_from_pc_files, plot_pc_timeline
+import logging
 
 
 def init_settings_i_dont_know():
@@ -98,11 +99,18 @@ def normalize(X_train, X_test):
 def get_std_ranges(X_train, number_of_models, epsilon=0.00001):
     ''' ranges to create a forest of autoencoders '''
     std = X_train.std(axis=1)
-    std_interval = (std.max() - std.min()) / number_of_models
-    ranges = list(zip(
-            np.arange(std.min(), std.max(), std_interval),
-            np.arange(std.min() + std_interval, std.max() + epsilon, std_interval)
+    #std_interval = (std.max() - std.min()) / number_of_models
+    #ranges = list(zip(
+    #        np.arange(std.min(), std.max(), std_interval),
+    #        np.arange(std.min() + std_interval, std.max() + epsilon, std_interval)
+    #        ))
+    ranges = []
+    for interval in pd.qcut( pd.DataFrame(std)[0], number_of_models, duplicates='drop').unique():
+        ranges.append((
+            interval.left, 
+            interval.right
             ))
+    ranges = sorted(ranges)
     ranges[0] = (0.0, ranges[0][1])
     ranges[-1] = (ranges[-1][0], 99999999.0)
     return ranges
@@ -110,6 +118,12 @@ def get_std_ranges(X_train, number_of_models, epsilon=0.00001):
 def get_windows_subset(windows, std_range):
     std = windows.std(axis=1)
     return windows[(std >= std_range[0]) & (std <= std_range[1])]
+
+def print_table_row(range_index, std_range, train_windows_count, test_windows_count):
+    std_range_str = f'{round(std_range[0],1)} - {round(std_range[1],1)})'
+    line = f'{range_index+1:<3}{std_range_str:<15} {train_windows_count:<5} {test_windows_count:<5}'
+
+    logging.info(line)
 
 def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
     # for training data duplicate windows are dropped
@@ -130,8 +144,13 @@ def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
     std_test = X_test.std(axis=1)
 
     ranges = get_std_ranges(X_train, number_of_models)
-    print(ranges)
+    logging.info(f'The following {number_of_models} standard deviation ranges are going to be used:')
     for std_range in ranges:
+        logging.info(std_range)
+
+    logging.info(f'Training and testing {number_of_models} LSTM autoencoders:')
+    logging.info(f'   {"std range":<15} {"train":<5} {"test":<5}')
+    for i, std_range in enumerate(ranges):
         # for testing data speed isn't a problem (predictions are done relatively fast)
         # so duplicates don't have to be dropped (which is good because it wouldn't be good for presenting results)
         X_train_subset = get_windows_subset(X_train, std_range)
@@ -147,37 +166,53 @@ def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
         # X_test_subset = np.array( X_test_subset[:-1] ).reshape(-1, window_size, 1)
         X_test_subset = np.array( X_test_subset ).reshape(-1, window_size, 1)
 
+        print_table_row(i, std_range, X_train_subset.shape[0], X_test_subset.shape[0])
+
         model = create_model(X_train_subset)
 
         # import pdb; pdb.set_trace()
 
-        if not X_train_subset.any() or not X_test_subset.any():
+        # if there isn't any testing windows having this std range
+        # then there's no need to train the model
+        if not X_test_subset.any():
+            logging.info(f'None of testing windows had standard deviation in range {std_range}')
             continue
 
-        history = model.fit(
-            X_train_subset, X_train_subset,#y_train, #X_train_subset
-            epochs=epochs,
-            batch_size=5000,#32,
-            # validation_split=0.1,
-            shuffle=True
-            # callbacks=[PlotLossesKeras()]
-        )
+        # if there are testing examples, but not training ones,
+        # then model can't be trained and all testing examples
+        # should be marked as anomalous (because they were probably
+        # not present in training)
+        if X_train_subset.any():
+            history = model.fit(
+                X_train_subset, X_train_subset,#y_train, #X_train_subset
+                epochs=epochs,
+                batch_size=5000,#32,
+                # validation_split=0.1,
+                shuffle=True,
+                verbose=0 # 0=silent, 1=progress bar, 2=one line per epoch
+                # callbacks=[PlotLossesKeras()]
+            )
 
-        #plt.show()
-        #plt.plot(history.history['loss'], label='train')
-        #plt.plot(history.history['val_loss'], label='test')
-        #plt.legend();
-        #plt.show()
+            #plt.show()
+            #plt.plot(history.history['loss'], label='train')
+            #plt.plot(history.history['val_loss'], label='test')
+            #plt.legend();
+            #plt.show()
 
-        X_train_pred = model.predict(X_train_subset)
-
-        train_mae_loss = np.mean(np.abs(X_train_pred - X_train_subset), axis=1)
-
-        X_test_pred = model.predict(X_test_subset)
-
-        test_mae_loss = np.mean(np.abs(X_test_pred - X_test_subset), axis=1)
-
-        THRESHOLD = train_mae_loss.max()
+            # X_train_pred = model.predict(X_train_subset)
+            X_train_pred = model(X_train_subset)
+            train_mae_loss = np.mean(np.abs(X_train_pred - X_train_subset), axis=1)
+            # X_test_pred = model.predict(X_test_subset)
+            X_test_pred = model(X_test_subset)
+            test_mae_loss = np.mean(np.abs(X_test_pred - X_test_subset), axis=1)
+            THRESHOLD = train_mae_loss.max()
+        else:
+            # if no training examples were in current std_range
+            # but some testing examples were, then all testing examples
+            # are anomalous
+            logging.info(f'None of training windows had standard deviation in {std_range} range. But some testing windows had, all of them are going to be classified as anomalous (test_mae_loss is forced to be 0.001 and threshold is forced to be 0). subset_indices={subset_indices}')
+            test_mae_loss = np.array([0.001]*X_test_subset.shape[0])
+            THRESHOLD = 0.0
 
         # results_df = pd.DataFrame(index=test[window_size:].index) #(index=test[window_size:].index)
 
@@ -238,15 +273,20 @@ def plot_results(df_a, results_df, anomalies_df, window_size, fig_title='', func
     axs[1].set_xlabel('Instruction index')
     axs[1].set_ylabel('Program counter (address)')
     axs[1].get_yaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
+
+    if not anomalies_df.shape[0]:
+        return axs
     # draw anomaly region highlights
     for i, row in anomalies_df.iterrows():
         axs[1].axvspan(row['window_start'], row['window_end'], color='red', alpha=0.15)
     # draw stars
     df_a.iloc[ anomalies_df['window_end'] ].plot(ax=axs[1], color='r', marker='*', markersize=10, linestyle='none', legend=None)
+    return axs
 
 
 
 if __name__ == '__main__':
+    logging.getLogger().setLevel(logging.INFO)
     window_size = 20
 
     init_settings_i_dont_know()
