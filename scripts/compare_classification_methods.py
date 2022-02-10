@@ -92,6 +92,14 @@ parser.add_argument(
         help='How many program counter transitions to take into account for "unique transitions" method (2 by default)'
         )
 
+parser.add_argument(
+        '--autoencoder-forest-size',
+        required=False,
+        type=int,
+        default=1,
+        metavar='',
+        help='How many autoencoder models to use that focus on its own standard deviation range.'
+        )
 args = parser.parse_args()
 
 import os
@@ -129,7 +137,7 @@ if __name__ == '__main__':
     plot_vspans(ax3, df_a_detected_points.index.values - args.transition_sequence_size+1, args.transition_sequence_size-1)
 
     # LSTM autoencoder
-    results_df, anomalies_df = lstm_autoencoder.detect(df_n, df_a, window_size=args.window_size, epochs=args.epochs)
+    results_df, anomalies_df = lstm_autoencoder.detect(df_n, df_a, window_size=args.window_size, epochs=args.epochs, number_of_models=args.autoencoder_forest_size)
     lstm_autoencoder.plot_results(df_a, results_df, anomalies_df, args.window_size, fig_title = 'LSTM AUTOENCODER RESULTS', function_ranges=function_ranges)
 
     plt.show()

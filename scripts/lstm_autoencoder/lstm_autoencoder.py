@@ -69,42 +69,7 @@ from keras import backend as K
 def root_mean_squared_error(y_true, y_pred):
         return K.sqrt(K.mean(K.square(y_pred - y_true)))
 
-def detect(df_n, df_a, window_size=20, epochs=10):
-    # for training data duplicate windows are dropped
-    # it greatly improves training times
-
-    # scaler = StandardScaler()
-    # melted_df_n = df_n.melt(value_name='all_pc').drop('variable', axis=1).dropna()[['all_pc']].values.reshape(-1,1)
-    # scaler.fit(melted_df_n)
-    # import pdb; pdb.set_trace()
-    # df_n_scaled = df_n.apply(scaler.transform, axis=1)
-    # df_a_scaled = df_a.apply(scaler.transform, axis=1)
-
-    X_train = utils.pc_df_to_sliding_windows(df_n, window_size, unique=True).values
-
-    # for testing data speed isn't a problem (predictions are done relatively fast)
-    # so duplicates don't have to be dropped (which is good because it wouldn't be good for presenting results)
-    X_test = utils.pc_df_to_sliding_windows(df_a, window_size).values
-
-    min_val = tf.reduce_min(X_train)
-    max_val = tf.reduce_max(X_train)
-
-    # normalization for fast gradient descent
-    X_train = (X_train - min_val) / (max_val - min_val)
-    X_test = (X_test - min_val) / (max_val - min_val)
-    X_train = tf.cast(X_train, tf.float32)
-    X_test = tf.cast(X_test, tf.float32)
-
-# reshape to [samples, window_size, n_features]
-# X_train, y_train = create_dataset(train[['close']], train.close, window_size)
-# X_test, y_test = create_dataset(test[['close']], test.close, window_size)
-
-    y_train = produce_y( X_train )
-    X_train = np.array( X_train[:-1] ).reshape(-1, window_size, 1)
-
-    y_test = produce_y( X_test )
-    X_test = np.array( X_test[:-1] ).reshape(-1, window_size, 1)
-
+def create_model(X_train):
     model = keras.Sequential()
     model.add(keras.layers.LSTM(
         units=64, 
@@ -116,59 +81,114 @@ def detect(df_n, df_a, window_size=20, epochs=10):
     model.add(keras.layers.Dropout(rate=0.2))
     model.add(keras.layers.TimeDistributed(keras.layers.Dense(units=X_train.shape[2])))
     model.compile(loss='mae', optimizer='adam')
+    return model
 
+def normalize(X_train, X_test):
+    X_train = X_train.values
+    X_test = X_test.values
+    min_val = tf.reduce_min(X_train)
+    max_val = tf.reduce_max(X_train)
+    X_train = (X_train - min_val) / (max_val - min_val)
+    X_test = (X_test - min_val) / (max_val - min_val)
 
-    # model = keras.Sequential()
-    # model.add(keras.layers.LSTM(128, activation='relu', input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=True))
-    # model.add(keras.layers.LSTM(64, activation='relu', return_sequences=False))
-    # model.add(keras.layers.RepeatVector(n=X_train.shape[1]))
-    # model.add(keras.layers.LSTM(64, activation='relu', return_sequences=True))
-    # model.add(keras.layers.LSTM(128, activation='relu', return_sequences=True))
-    # model.add(keras.layers.TimeDistributed(keras.layers.Dense(units=X_train.shape[2])))
-    # model.compile(optimizer='adam', loss='mse')
+    X_train = tf.cast(X_train, tf.float32)
+    X_test = tf.cast(X_test, tf.float32)
+    return X_train, X_test
 
-    # model.compile(loss=root_mean_squared_error, optimizer='rmsprop')
+def get_std_ranges(X_train, number_of_models, epsilon=0.00001):
+    ''' ranges to create a forest of autoencoders '''
+    std = X_train.std(axis=1)
+    std_interval = (std.max() - std.min()) / number_of_models
+    ranges = list(zip(
+            np.arange(std.min(), std.max(), std_interval),
+            np.arange(std.min() + std_interval, std.max() + epsilon, std_interval)
+            ))
+    ranges[0] = (0.0, ranges[0][1])
+    ranges[-1] = (ranges[-1][0], 99999999.0)
+    return ranges
 
+def get_windows_subset(windows, std_range):
+    std = windows.std(axis=1)
+    return windows[(std >= std_range[0]) & (std <= std_range[1])]
+
+def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
+    # for training data duplicate windows are dropped
+    # it greatly improves training times
+
+    # scaler = StandardScaler()
+    # melted_df_n = df_n.melt(value_name='all_pc').drop('variable', axis=1).dropna()[['all_pc']].values.reshape(-1,1)
+    # scaler.fit(melted_df_n)
     # import pdb; pdb.set_trace()
+    # df_n_scaled = df_n.apply(scaler.transform, axis=1)
+    # df_a_scaled = df_a.apply(scaler.transform, axis=1)
 
-    history = model.fit(
-        X_train, y_train, #X_train
-        epochs=epochs,
-        batch_size=5000,#32,
-        validation_split=0.1,
-        shuffle=True
-        # callbacks=[PlotLossesKeras()]
-    )
+    X_train = utils.pc_df_to_sliding_windows(df_n, window_size, unique=True)
+    X_test = utils.pc_df_to_sliding_windows(df_a, window_size)
 
-    #plt.show()
-    #plt.plot(history.history['loss'], label='train')
-    #plt.plot(history.history['val_loss'], label='test')
-    #plt.legend();
-    #plt.show()
+    results_df = pd.DataFrame( index=df_a.index.values[:-window_size+1] , columns = ['loss', 'threshold', 'anomaly', 'window_start', 'window_end'])
+    std_train = X_train.std(axis=1)
+    std_test = X_test.std(axis=1)
 
-    X_train_pred = model.predict(X_train)
+    ranges = get_std_ranges(X_train, number_of_models)
+    print(ranges)
+    for std_range in ranges:
+        # for testing data speed isn't a problem (predictions are done relatively fast)
+        # so duplicates don't have to be dropped (which is good because it wouldn't be good for presenting results)
+        X_train_subset = get_windows_subset(X_train, std_range)
+        X_test_subset = get_windows_subset(X_test, std_range)
+        subset_indices = X_test_subset.index.values
 
-    train_mae_loss = np.mean(np.abs(X_train_pred - X_train), axis=1)
+        X_train_subset, X_test_subset = normalize(X_train_subset, X_test_subset)
 
-    # sns.distplot(train_mae_loss, bins=50, kde=True);
+        # y_train = produce_y( X_train_subset )
+        # X_train_subset = np.array( X_train_subset[:-1] ).reshape(-1, window_size, 1)
+        X_train_subset = np.array( X_train_subset ).reshape(-1, window_size, 1)
+        # y_test = produce_y( X_test_subset )
+        # X_test_subset = np.array( X_test_subset[:-1] ).reshape(-1, window_size, 1)
+        X_test_subset = np.array( X_test_subset ).reshape(-1, window_size, 1)
 
-    X_test_pred = model.predict(X_test)
+        model = create_model(X_train_subset)
 
-    test_mae_loss = np.mean(np.abs(X_test_pred - X_test), axis=1)
+        # import pdb; pdb.set_trace()
 
-    # THRESHOLD = 0.65
-    THRESHOLD = train_mae_loss.max()
+        if not X_train_subset.any() or not X_test_subset.any():
+            continue
 
-    # results_df = pd.DataFrame(index=test[window_size:].index) #(index=test[window_size:].index)
+        history = model.fit(
+            X_train_subset, X_train_subset,#y_train, #X_train_subset
+            epochs=epochs,
+            batch_size=5000,#32,
+            # validation_split=0.1,
+            shuffle=True
+            # callbacks=[PlotLossesKeras()]
+        )
 
-    # results_df = pd.DataFrame( index=df_a.index.values[window_size:-window_size] )
-    results_df = pd.DataFrame( index=df_a.index.values[:-window_size] )
-    # results_df['loss'] = np.concatenate((train_mae_loss, test_mae_loss))
-    results_df['loss'] = test_mae_loss
-    results_df['threshold'] = THRESHOLD
-    results_df['anomaly'] = results_df.loss > results_df.threshold
-    results_df['window_start'] = results_df.index.values
-    results_df['window_end'] = results_df['window_start'] + window_size
+        #plt.show()
+        #plt.plot(history.history['loss'], label='train')
+        #plt.plot(history.history['val_loss'], label='test')
+        #plt.legend();
+        #plt.show()
+
+        X_train_pred = model.predict(X_train_subset)
+
+        train_mae_loss = np.mean(np.abs(X_train_pred - X_train_subset), axis=1)
+
+        X_test_pred = model.predict(X_test_subset)
+
+        test_mae_loss = np.mean(np.abs(X_test_pred - X_test_subset), axis=1)
+
+        THRESHOLD = train_mae_loss.max()
+
+        # results_df = pd.DataFrame(index=test[window_size:].index) #(index=test[window_size:].index)
+
+        # results_df = pd.DataFrame( index=df_a.index.values[window_size:-window_size] )
+        
+        # results_df['loss'] = np.concatenate((train_mae_loss, test_mae_loss))
+        results_df['loss'].loc[subset_indices] = test_mae_loss.reshape(-1)
+        results_df['threshold'].loc[subset_indices] = THRESHOLD
+        results_df['anomaly'].loc[subset_indices] = results_df['loss'].loc[subset_indices] > results_df['threshold'].loc[subset_indices]
+        results_df['window_start'].loc[subset_indices] = results_df.loc[subset_indices].index.values
+        results_df['window_end'].loc[subset_indices] = results_df['window_start'].loc[subset_indices] + window_size
 
     # results_df['close'] = test[window_size:].close
     # results_df[['train_loss', 'test_loss', 'threshold', 'anomaly']].plot()
@@ -193,16 +213,19 @@ def plot_results(df_a, results_df, anomalies_df, window_size, fig_title='', func
     ax = results_df[['loss']].plot(ax=axs[0], color='purple', linewidth=0.7)
     # markers to show distinct points
     results_df[['loss']].plot(ax=axs[0], marker='h', markersize=1, linestyle='none', legend=None)
+    results_df[['threshold']].plot(ax=axs[0], color='red', legend=None)
 
     ax.set_title(f'Reconstruction error of each window (size={window_size}) in compromised program')
     ax.set_xlabel('Index of sliding window')
     ax.set_ylabel('Window reconstruction error')
     ax.legend().remove()
 
-    threshold = results_df['threshold'].iloc[0]
-    ax.axhline(threshold, color='r', label='Threshold')#, linestyle='--')
+    # threshold = results_df['threshold'].iloc[0]
+    last_threshold = results_df['threshold'].iloc[-1]
+    # ax.axhline(threshold, color='r', label='Threshold')#, linestyle='--')
+
     ax_t = ax.twinx()
-    ax_t.set_yticks([threshold])
+    ax_t.set_yticks([last_threshold])
     ax_t.set_yticklabels(['Threshold'], fontdict={'fontsize':7})
     ax_t.set_ylim(*ax.get_ylim())
     ax_t.legend().remove()
