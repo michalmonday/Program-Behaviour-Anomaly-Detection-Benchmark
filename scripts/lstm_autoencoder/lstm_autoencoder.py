@@ -126,6 +126,8 @@ def print_table_row(range_index, std_range, train_windows_count, test_windows_co
     logging.info(line)
 
 def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
+    utils.print_header(f'LSTM AUTOENCODER (window_size={window_size}, number_of_models={number_of_models})')
+
     # for training data duplicate windows are dropped
     # it greatly improves training times
 
@@ -236,6 +238,7 @@ def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
     #plt.show()
 
     anomalies = results_df[results_df.anomaly == True]
+    logging.info(f'Number of detected anomalies in test program: {anomalies.shape[0]}')
     return results_df, anomalies
 
 

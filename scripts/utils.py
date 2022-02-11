@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import logging
 
 def read_pc_values(f_name, relative_pc=False, ignore_non_jumps=False, load_address=0):
     with open(f_name) as f:
@@ -174,4 +175,19 @@ def introduce_artificial_anomalies(df):
     col[110] += 8
     anomalies_ranges.append((110-1, 110+1))
     return df, anomalies_ranges, original_values
+
+def print_config(c):
+    print_header('CONFIG')
+    for s in c.sections():
+        logging.info(f'[{s}]')
+        for k,v in c.items(s):
+            logging.info(f'    {k} = {v}')
+        logging.info('')
+    logging.info('')
+
+def print_header(h):
+    size = max(50, len(h)+4)
+    logging.info('\n\n' + "#" * size)
+    logging.info("#{0:^{size}}\n".format(h, size=size))
+    # logging.info("#" * 20)
 

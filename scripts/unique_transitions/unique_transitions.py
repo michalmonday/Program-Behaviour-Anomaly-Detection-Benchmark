@@ -19,6 +19,7 @@ import inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir) 
+import logging
 
 import utils
 from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files
@@ -70,8 +71,13 @@ from lstm_autoencoder import lstm_autoencoder
 #    return unique_transitions
 
 def detect(df_n, df_a, n=2):
+    utils.print_header(f'UNIQUE TRANSITIONS (n={n})')
     normal_ut = utils.pc_df_to_sliding_windows(df_n, window_size=n, unique=True)
     abnormal_ut = utils.pc_df_to_sliding_windows(df_a, window_size=n, unique=True)
+
+    logging.info(f'Number of train programs: {df_n.shape[1]}')
+    logging.info(f'Longest train program size: {df_n.shape[0]} instructions')
+    logging.info(f'Number of unique train sequences (with size of {n}): {normal_ut.shape[0]}')
 
     # gets abnormal_ut entries that are not present in normal_ut
     # (it ignores df index so that's why it's ugly)
@@ -94,6 +100,9 @@ def detect(df_n, df_a, n=2):
     # df_a_col0 =  df_a[df_a.columns[0]]
     # df_a_detected_points = df_a[ df_a.iloc[:,0].rolling(2).apply(lambda x: ((detected_ut['all_pc'] == x.iloc[0]) & (detected_ut['all_pc_shifted'] == x.iloc[1])).any() ) > 0.0 ]
     df_a_detected_points = df_a[ df_a.iloc[:,0].rolling(n).apply(lambda x: was_detected(x) ) > 0.0 ]
+
+    logging.info(f'Test program size: {df_a.shape[0]} instructions')
+    logging.info(f'Number of detected anomalies in test program: {df_a_detected_points.shape[0]}')
     return detected_ut, df_a_detected_points
 
 
