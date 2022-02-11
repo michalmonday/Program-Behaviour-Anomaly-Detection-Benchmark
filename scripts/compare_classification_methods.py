@@ -134,7 +134,7 @@ if __name__ == '__main__':
     df_a = df_from_pc_files(args.abnormal_pc, column_prefix='abnormal: ', relative_pc=args.relative_pc, ignore_non_jumps=args.ignore_non_jumps, load_address=args.abnormal_load_address)
 
     if args.introduce_artificial_anomalies:
-        df_a, anomalies_ranges = utils.introduce_artificial_anomalies(df_a)
+        df_a, anomalies_ranges, pre_anomaly_values = utils.introduce_artificial_anomalies(df_a)
     
     # Plot training (normal pc) and testing (abnormal/compromised pc) data
     fig, axs = plt.subplots(2)
@@ -142,18 +142,22 @@ if __name__ == '__main__':
     fig.suptitle('TRAINING AND TESTING DATA', fontsize=20)
     ax  = plot_pc_timeline(df_n, function_ranges, ax=axs[0], title='Normal program counters - used for training')
     ax2 = plot_pc_timeline(df_a, function_ranges, ax=axs[1], title='Abnormal program counters - used for testing')
+    if args.introduce_artificial_anomalies:
+        plot_vspans_ranges(ax2, anomalies_ranges, color='blue', alpha=0.05)
+        for vals in pre_anomaly_values:
+            vals.plot(ax=ax2, color='blue', marker='h', markersize=2, linewidth=0.7, linestyle='dashed')
+            # import pdb; pdb.set_trace()
+            ax2.fill_between(vals.index.values, vals.values, df_a.loc[vals.index].values.reshape(-1), color='r', alpha=0.15)
 
     # Unique transitions
     detected_ut, df_a_detected_points = unique_transitions.detect(df_n, df_a, n=args.transition_sequence_size)
     ax3 = plot_pc_timeline(df_a, function_ranges, title=f'UNIQUE TRANSITIONS METHOD (n={args.transition_sequence_size}) RESULTS')
     df_a_detected_points.plot(ax=ax3, color='r', marker='*', markersize=10, linestyle='none', legend=None)
     plot_vspans(ax3, df_a_detected_points.index.values - args.transition_sequence_size+1, args.transition_sequence_size-1, color='red')
-    # plot_vspans_ranges(ax3, anomalies_ranges, color='blue')
 
     # LSTM autoencoder
     results_df, anomalies_df = lstm_autoencoder.detect(df_n, df_a, window_size=args.window_size, epochs=args.epochs, number_of_models=args.autoencoder_forest_size)
     axs = lstm_autoencoder.plot_results(df_a, results_df, anomalies_df, args.window_size, fig_title = 'LSTM AUTOENCODER RESULTS', function_ranges=function_ranges)
-    # plot_vspans_ranges(axs[1], anomalies_ranges, color='blue')
 
     plt.show()
     

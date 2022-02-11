@@ -132,7 +132,7 @@ def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7, ax=None, t
     ax2_t.set_yticks([v[0] for v in function_ranges.values()])
     ax2_t.set_yticklabels(list(function_ranges.keys()), fontdict={'fontsize':7})
     ax2_t.set_ylim(*ax2.get_ylim())
-    df.plot(ax=ax2, marker='h', markersize=1, linestyle='none', legend=None)
+    df.plot(ax=ax2, marker='h', markersize=2, linestyle='none', legend=None)
     return ax2
 
 def plot_vspans(ax, values, size, color='red', alpha=0.15):
@@ -152,22 +152,26 @@ def introduce_artificial_anomalies(df):
     col = df.iloc[:,0]
 
     anomalies_ranges = []
+    original_values = []
 
     # EASY TO DETECT
     #     set values at index 10,11,12,13,14 to random values
     how_many = 5
+    original_values.append(col[10-1:10+how_many+1].copy())
     col[10:10+how_many] = np.random.randint(col.min(), col.max(), how_many)
-    anomalies_ranges.append((10,10+how_many))
+    anomalies_ranges.append((10-1,10+how_many))
 
     # HARDER TO DETECT
     #     slightly modify values at index 60,61,62,63,64 
     #     (by adding or subtracting multiply of 8)
+    original_values.append(col[60-1:60+how_many+1].copy())
     col[60:60+how_many] += np.random.randint(-3, 3, how_many) * 8 
-    anomalies_ranges.append((60,60+how_many))
+    anomalies_ranges.append((60-1,60+how_many))
 
     # HARD TO DETECT
     #     modify a single value at index 110 by adding 8 to it
+    original_values.append(col[110-1:111+1].copy())
     col[110] += 8
-    anomalies_ranges.append((110, 111))
-    return df, anomalies_ranges
+    anomalies_ranges.append((110-1, 110+1))
+    return df, anomalies_ranges, original_values
 

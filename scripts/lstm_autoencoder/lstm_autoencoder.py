@@ -120,7 +120,7 @@ def get_windows_subset(windows, std_range):
     return windows[(std >= std_range[0]) & (std <= std_range[1])]
 
 def print_table_row(range_index, std_range, train_windows_count, test_windows_count):
-    std_range_str = f'{round(std_range[0],1)} - {round(std_range[1],1)})'
+    std_range_str = f'{round(std_range[0],1)} - {round(std_range[1],1)}'
     line = f'{range_index+1:<3}{std_range_str:<15} {train_windows_count:<5} {test_windows_count:<5}'
 
     logging.info(line)
