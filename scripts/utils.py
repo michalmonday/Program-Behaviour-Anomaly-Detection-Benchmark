@@ -33,7 +33,7 @@ def df_from_pc_files(f_list, column_prefix='', relative_pc=False, ignore_non_jum
     def short_name(f_name):
         return f_name.split('/')[-1] 
 
-    column_names = [column_prefix + short_name(f_name) for f in f_list]
+    column_names = [column_prefix + short_name(f_name) for f_name in f_list]
     df = pd.DataFrame(all_pc, dtype=np.int64, index=column_names).T
     return df
 
@@ -110,31 +110,37 @@ def plot_pc_histogram(df, function_ranges={}, bins=100, function_line_width=0.7,
     ax.set_ylabel('Frequency')
     return ax
     
-def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7, ax=None, title='Timeline of program counters'):
+def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7, ax=None, title='Timeline of program counters', **plot_kwargs_):
+    plot_kwargs = {
+            'linewidth':0.7,
+            'title': title,
+            'markersize': 2,
+            'marker': 'h',
+            **plot_kwargs_
+            }
     if ax:
-        ax2 = df.plot(linewidth=0.7, ax=ax, title=title)
-    else:
-        ax2 = df.plot(linewidth=0.7, title=title)
-    ax2.set_xlabel('Instruction index')
-    ax2.set_ylabel('Program counter (address)')
-    y_start, y_end = ax2.get_yticks()[0], ax2.get_yticks()[-1]
-    ax2.get_yaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
+        plot_kwargs['ax'] = ax
+    ax = df.plot(**plot_kwargs)
+    ax.set_xlabel('Instruction index')
+    ax.set_ylabel('Program counter (address)')
+    y_start, y_end = ax.get_yticks()[0], ax.get_yticks()[-1]
+    ax.get_yaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
     i = 0
     for func_name, (start, end) in function_ranges.items():
         if func_name == 'total': continue
         # print(start, end, y_start, y_end)
         if start < y_start or end > y_end: continue
         # print(start)
-        ax2.axhline(y=start, color='lightgray', linewidth=function_line_width, linestyle='dashed')
-        # ax2.text(df.shape[0]*(0.9-i/80), start, func_name, rotation=0, va='bottom', fontsize='x-small')
-        # ax2.text(df.shape[0]*0.8, start, func_name, rotation=0, va='bottom', fontsize='x-small')
+        ax.axhline(y=start, color='lightgray', linewidth=function_line_width, linestyle='dashed')
+        # ax.text(df.shape[0]*(0.9-i/80), start, func_name, rotation=0, va='bottom', fontsize='x-small')
+        # ax.text(df.shape[0]*0.8, start, func_name, rotation=0, va='bottom', fontsize='x-small')
         i += 1
-    ax2_t = ax2.twinx()
-    ax2_t.set_yticks([v[0] for v in function_ranges.values()])
-    ax2_t.set_yticklabels(list(function_ranges.keys()), fontdict={'fontsize':7})
-    ax2_t.set_ylim(*ax2.get_ylim())
-    df.plot(ax=ax2, marker='h', markersize=2, linestyle='none', legend=None)
-    return ax2
+    ax_t = ax.twinx()
+    ax_t.set_yticks([v[0] for v in function_ranges.values()])
+    ax_t.set_yticklabels(list(function_ranges.keys()), fontdict={'fontsize':7})
+    ax_t.set_ylim(*ax.get_ylim())
+    # df.plot(ax=ax, marker='h', markersize=2, linestyle='none', legend=None)
+    return ax
 
 def plot_vspans(ax, values, size, color='red', alpha=0.15):
     for i in values:

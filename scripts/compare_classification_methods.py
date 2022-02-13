@@ -134,6 +134,10 @@ print_config(conf)
 
 
 if __name__ == '__main__':
+
+    #########################################
+    # Load and plot data
+
     # Load function_ranges (used just for plotting)
     function_ranges = json.load(args.function_ranges) if args.function_ranges else {}
     # Load program counter values from files
@@ -150,34 +154,38 @@ if __name__ == '__main__':
             ignore_non_jumps = conf['data'].getboolean('ignore_non_jumps'),
             load_address     = conf['data'].getint('abnormal_load_address')
             )
-
     logging.info(f'Number of normal pc files: {df_n.shape[1]}')
     logging.info(f'Number of abnormal pc files: {df_a.shape[1]}')
-
+    # Introduce artificial anomalies
     if conf['data'].getboolean('introduce_artificial_anomalies'):
         df_a, anomalies_ranges, pre_anomaly_values = utils.introduce_artificial_anomalies(df_a)
-    
     # Plot training (normal pc) and testing (abnormal/compromised pc) data
     fig, axs = plt.subplots(2)
     fig.subplots_adjust(hspace=0.43, top=0.835)
     fig.suptitle('TRAINING AND TESTING DATA', fontsize=20)
     ax  = plot_pc_timeline(df_n, function_ranges, ax=axs[0], title='Normal program counters - used for training')
     ax2 = plot_pc_timeline(df_a, function_ranges, ax=axs[1], title='Abnormal program counters - used for testing')
+    # Plot artificial anomalies
     if conf['data'].getboolean('introduce_artificial_anomalies'):
         plot_vspans_ranges(ax2, anomalies_ranges, color='blue', alpha=0.05)
         for vals in pre_anomaly_values:
-            vals.plot(ax=ax2, color='blue', marker='h', markersize=2, linewidth=0.7, linestyle='dashed')
-            # import pdb; pdb.set_trace()
+            vals.plot(ax=ax2, color='purple', marker='h', markersize=2, linewidth=0.7, linestyle='dashed')
             ax2.fill_between(vals.index.values, vals.values, df_a.loc[vals.index].values.reshape(-1), color='r', alpha=0.15)
 
+
+    #########################################
     # Unique transitions
+
     n = conf['unique_transitions'].getint('sequence_size')
     detected_ut, df_a_detected_points = unique_transitions.detect(df_n, df_a, n=n)
     ax3 = plot_pc_timeline(df_a, function_ranges, title=f'UNIQUE TRANSITIONS METHOD (n={n}) RESULTS')
     df_a_detected_points.plot(ax=ax3, color='r', marker='*', markersize=10, linestyle='none', legend=None)
     plot_vspans(ax3, df_a_detected_points.index.values - n+1, n-1, color='red')
 
+
+    #########################################
     # LSTM autoencoder
+
     window_size = conf['lstm_autoencoder'].getint('window_size')
     results_df, anomalies_df = lstm_autoencoder.detect(df_n, df_a, window_size=window_size, epochs=conf['lstm_autoencoder'].getint('epochs'), number_of_models=conf['lstm_autoencoder'].getint('forest_size'))
     axs = lstm_autoencoder.plot_results(df_a, results_df, anomalies_df, window_size, fig_title = 'LSTM AUTOENCODER RESULTS', function_ranges=function_ranges)

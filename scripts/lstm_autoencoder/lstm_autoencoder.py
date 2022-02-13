@@ -150,7 +150,7 @@ def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
     for std_range in ranges:
         logging.info(std_range)
 
-    logging.info(f'Training and testing {number_of_models} LSTM autoencoders:')
+    logging.info(f'\nTraining and testing {number_of_models} LSTM autoencoders:')
     logging.info(f'   {"std range":<15} {"train":<5} {"test":<5}')
     for i, std_range in enumerate(ranges):
         # for testing data speed isn't a problem (predictions are done relatively fast)
@@ -208,6 +208,7 @@ def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
             X_test_pred = model(X_test_subset)
             test_mae_loss = np.mean(np.abs(X_test_pred - X_test_subset), axis=1)
             THRESHOLD = train_mae_loss.max()
+
         else:
             # if no training examples were in current std_range
             # but some testing examples were, then all testing examples
@@ -239,6 +240,11 @@ def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
 
     anomalies = results_df[results_df.anomaly == True]
     logging.info(f'Number of detected anomalies in test program: {anomalies.shape[0]}')
+
+    model.save('lstm_autoencoder_model.h5')
+    logging.info('\nExample model.summary():')
+    model.summary()
+
     return results_df, anomalies
 
 
