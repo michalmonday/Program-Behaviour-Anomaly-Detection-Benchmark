@@ -1,22 +1,60 @@
 import os
+import random
 
 file_name = 'main.c'
 executable_name = file_name.split('.')[0]
 func_prefix = 'func_'
+func_count = 100
+shuffle_funcs = True
 
-normal_sequences = [
-    "0 1 2"
-    ]
+normal_sequences_count = 1
+normal_sequence_size = 10
 
-abnormal_sequences = [
-    "2 1 1",
-    "1 1 0"
-    ]
+normal_sequences = generate_normal_sequences(
+        normal_sequences_count,
+        normal_sequence_size,
+        funcs_count
+        )
 
+abnormal_sequences = generate_abnormal_sequences(
+        normal_sequences,
+        normal_sequence_size, 
+        funcs_count
+        )
 
-def generate_functions(count, func_prefix):
+def generate_normal_sequences(count, seq_size, funcs_count):
+    sequences = []
+    for i in range(count):
+        seq = []
+        for j in range(seq_size):
+            seq += str( random.randint(0, func_count) ) + ' '
+        sequences.append(seq.strip())
+    return sequences
+
+def generate_abnormal_sequences(normal_sequences, seq_size, funcs_count):
+    ''' Generate different types of abnormal program sequences
+        with increasing difficulty of detection. '''
+    sequences = []
+
+    seq = []
+    for i in range(seq_size):
+        seq.append(  )
+    
+    for i in range(5):
+        seq = []
+        for j in range(seq_size):
+            seq += str( random.randint(0, func_count) ) + ' '
+        sequences.append(seq)
+    return sequences.strip()
+
+def generate_functions(count, func_prefix, shuffle):
     funcs_str = ''
     funcs_names = []
+    indices = range(count)
+    if shuffle:
+        random.shuffle(indices)
+
+
     for i in range(count):
         func_name = f'{func_prefix}{i}';
         funcs_names.append(func_name)
@@ -27,7 +65,7 @@ def generate_functions(count, func_prefix):
     return funcs_str, funcs_names
 
 
-functions, funcs_names = generate_functions(10, func_prefix=func_prefix)
+functions, funcs_names = generate_functions(func_count, func_prefix=func_prefix, shuffle=shuffle_funcs)
 
 content = f'''
 #include <stdio.h>
