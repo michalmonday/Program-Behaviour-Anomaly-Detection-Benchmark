@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import logging
+import random
 
 def read_pc_values(f_name, relative_pc=False, ignore_non_jumps=False, load_address=0):
     with open(f_name) as f:
@@ -150,7 +151,6 @@ def plot_vspans_ranges(ax, ranges, color='red', alpha=0.15):
     for start, end in ranges:
         ax.axvspan(start, end, color=color, alpha=alpha)
 
-
 def introduce_artificial_anomalies(df):
     ''' Currently (10/02/22) only single anomalous file is supported.
         It returns modified dataframe and ranges of indices where
@@ -181,6 +181,49 @@ def introduce_artificial_anomalies(df):
     col[110] += 8
     anomalies_ranges.append((110-1, 110+1))
     return df, anomalies_ranges, original_values
+
+class Artificial_Anomalies:
+    offset = 100
+
+    @staticmethod
+    def init(df):
+        ''' common variable initialization for all methods '''
+        return __class__.offset, [], []
+
+    @staticmethod
+    def randomize_section(col, section_size=5):
+        ''' EASY TO DETECT
+            set values at index 10,11,12,13,14 to random values '''
+        offset, anomalies_ranges, original_values = __class__.init(df)
+        original_values.append(col[offset-1:offset+section_size+1].copy())
+        col[offset:offset+section_size] = np.random.randint(col.min(), col.max(), section_size)
+        anomalies_ranges.append((offset-1,offset+section_size))
+        return col, anomalies_ranges, original_values
+
+
+    @staticmethod 
+    def slightly_randomize_section(col, section_size=5):
+        ''' Harder to detect
+            Slightly modify specified section (100:105 by default)
+            (by adding or subtracting multiply of 8) '''
+        offset, anomalies_ranges, original_values = __class__.init(df)
+        original_values.append( col[ offset-1:offset+section_size+1 ].copy() )
+        col[offset:offset+section_size] += np.random.randint(-3, 3, section_size) * 8 
+        anomalies_ranges.append( (offset-1, offset+section_size) )
+        return col, anomalies_ranges, original_values
+
+
+    @staticmethod
+    def minimal(col, to_add=8):
+        ''' Hard to detect.
+            Modify a single value by adding 8 to it. '''
+        offset, anomalies_ranges, original_values = __class__.init(df)
+
+        original_values.append( col[offset-1:offset+2].copy() )
+        col[offset] += to_add
+        anomalies_ranges.append( (offset-1, offset+1) )
+        return col, anomalies_ranges, original_values
+
 
 def print_config(c):
     print_header('CONFIG')

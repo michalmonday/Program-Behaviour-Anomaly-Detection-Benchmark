@@ -158,7 +158,9 @@ if __name__ == '__main__':
     logging.info(f'Number of abnormal pc files: {df_a.shape[1]}')
     # Introduce artificial anomalies
     if conf['data'].getboolean('introduce_artificial_anomalies'):
+        prev_df_a = df_a.copy()
         df_a, anomalies_ranges, pre_anomaly_values = utils.introduce_artificial_anomalies(df_a)
+        import pdb; pdb.set_trace()
     # Plot training (normal pc) and testing (abnormal/compromised pc) data
     fig, axs = plt.subplots(2)
     fig.subplots_adjust(hspace=0.43, top=0.835)
