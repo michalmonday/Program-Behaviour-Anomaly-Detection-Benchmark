@@ -25,6 +25,149 @@ from copy import deepcopy
 from utils import read_pc_values, df_from_pc_files, plot_pc_timeline
 import logging
 
+# list of min/max values for each autoencoder (within a forest)
+min_vals = []
+max_vals = []
+train_window_size = None
+thresholds = []
+std_ranges = []
+models = []
+
+# lstm_autoencoders = []
+# 
+# class LSTM_Autoenoder:
+#     def __init__(self):
+#         self.model = create_model()
+# 
+#         self.window_size = window_size
+# 
+#         # anomaly detection threshold (reconstruction error threshold)
+#         self.threshold = None
+# 
+#         # normalization
+#         self.min_val = None
+#         self.max_val = None
+# 
+#         #############################################
+#         # Members associated with autoencoder forest
+#         #############################################
+# 
+#         # reference to indices of sliding windows
+#         # (which is useful when LSTM_Autoencoder is 
+#         # part or a forest, in other words a part of an
+#         # array of models)
+#         self.subset_indices = []
+#         self.std_range = None
+# 
+#     def normalizer_fit(self, X_train):
+#         ''' There are multiple lists instead of single values because 
+#             "autoencoder forest" method may be used, where multiple 
+#             models are created (like an array of models), and each model
+#             has its own normalization. '''
+#         self.min_val( tf.reduce_min( X_train.values ) )
+#         self.max_val( tf.reduce_max( X_train.values ) )
+# 
+#     def normalizer_transform(self, X):
+#         X = (X.values - min_val) / (max_val - min_val)
+#         X = tf.cast(X, tf.float32)
+#         return X
+# 
+#     def train(self, ):
+#         train_window_size = window_size
+# 
+#         utils.print_header(f'LSTM AUTOENCODER (window_size={window_size}, number_of_models={number_of_models})')
+# 
+#         X_train = utils.pc_df_to_sliding_windows(df_n, window_size, unique=True)
+#         min_vals, max_vals = get_min_max_lists_for_normalization(X_train)
+# 
+#         
+# 
+#         ranges = get_std_ranges(X_train, number_of_models)
+#         logging.info(f'The following {number_of_models} standard deviation ranges are going to be used:')
+#         for std_range in ranges:
+#             logging.info(std_range)
+# 
+#         logging.info(f'\nTraining {number_of_models} LSTM autoencoders:')
+#         logging.info(f'   {"std range":<15} {"train":<5}')
+#         for i, std_range in enumerate(ranges):
+#             # for testing data, speed isn't a problem (predictions are done relatively fast)
+#             # so duplicates don't have to be dropped (which is good because it wouldn't be good for presenting results)
+#             X_train_subset = get_windows_subset(X_train, std_range)
+#             # X_train_subset, X_test_subset = normalize(X_train_subset, X_test_subset)
+#             X_train_subset = normalize_2(X_train_subset, min_vals[i], max_vals[i])
+#             X_test_subset = normalize_2(X_test_subset, min_vals[i], max_vals[i])
+# 
+#             X_train_subset = np.array( X_train_subset ).reshape(-1, window_size, 1)
+#             X_test_subset = np.array( X_test_subset ).reshape(-1, window_size, 1)
+# 
+#             print_table_row(i, std_range, X_train_subset.shape[0], X_test_subset.shape[0])
+# 
+#             model = create_model(X_train_subset)
+# 
+#             # if there isn't any testing windows having this std range
+#             # then there's no need to train the model
+#             # if not X_test_subset.any():
+#             #     logging.info(f'None of testing windows had standard deviation in range {std_range}')
+#             #     continue
+# 
+#             # if there are testing examples, but not training ones,
+#             # then model can't be trained and all testing examples
+#             # should be marked as anomalous (because they were probably
+#             # not present in training)
+#             if X_train_subset.any():
+#                 history = model.fit(
+#                     X_train_subset, X_train_subset,#y_train, #X_train_subset
+#                     epochs=epochs,
+#                     batch_size=5000,#32,
+#                     # validation_split=0.1,
+#                     shuffle=True,
+#                     verbose=0 # 0=silent, 1=progress bar, 2=one line per epoch
+#                     # callbacks=[PlotLossesKeras()]
+#                 )
+# 
+#                 #plt.show()
+#                 #plt.plot(history.history['loss'], label='train')
+#                 #plt.plot(history.history['val_loss'], label='test')
+#                 #plt.legend();
+#                 #plt.show()
+# 
+#                 X_train_pred = model(X_train_subset)
+#                 train_mae_loss = np.mean(np.abs(X_train_pred - X_train_subset), axis=1)
+#                 THRESHOLD = train_mae_loss.max()
+#                 thresholds.append( train_mae_loss.max() )
+# 
+#                 X_test_pred = model(X_test_subset)
+#                 test_mae_loss = np.mean(np.abs(X_test_pred - X_test_subset), axis=1)
+# 
+#             else:
+#                 # if no training examples were in current std_range
+#                 # but some testing examples were, then all testing examples
+#                 # are anomalous
+#                 logging.info(f'None of training windows had standard deviation in {std_range} range. But some testing windows had, all of them are going to be classified as anomalous (test_mae_loss is forced to be 0.001 and threshold is forced to be 0). subset_indices={subset_indices}')
+#                 THRESHOLD = 0.0
+#                 thresholds.append(0.0)
+# 
+#                 test_mae_loss = np.array([0.001]*X_test_subset.shape[0])
+# 
+#             # results_df = pd.DataFrame(index=test[window_size:].index) #(index=test[window_size:].index)
+#             # results_df = pd.DataFrame( index=df_a.index.values[window_size:-window_size] )
+#             # results_df['loss'] = np.concatenate((train_mae_loss, test_mae_loss))
+#             results_df['loss'].loc[subset_indices] = test_mae_loss.reshape(-1)
+#             results_df['threshold'].loc[subset_indices] = THRESHOLD
+#             results_df['anomaly'].loc[subset_indices] = results_df['loss'].loc[subset_indices] > results_df['threshold'].loc[subset_indices]
+#             results_df['window_start'].loc[subset_indices] = results_df.loc[subset_indices].index.values
+#             results_df['window_end'].loc[subset_indices] = results_df['window_start'].loc[subset_indices] + window_size
+# 
+# 
+#     def fit(self, *args, **kwargs):
+#         return self.model.fit(*args, **kwargs)
+# 
+#     def predict(self, df_a):
+#         
+#         self.model(df_a)
+
+
+
 
 def init_settings_i_dont_know():
     register_matplotlib_converters()
@@ -34,25 +177,25 @@ def init_settings_i_dont_know():
     np.random.seed(RANDOM_SEED)
     tf.random.set_seed(RANDOM_SEED)
 
-def produce_y(X_windows):
-    ''' y is the first program counter value following the last 
-        program counter of a window. That's how it was produced in the youtube
-        tutorial:
-        https://www.youtube.com/watch?v=H4J74KstHTE
-
-        However, in another example, "y" was simply X, which is natural
-        for autoencoders:
-        https://towardsdatascience.com/lstm-autoencoder-for-extreme-rare-event-classification-in-keras-ce209a224cfb
-
-        From my observations, training with "y" equal to X produces the same
-        results but takes more time.
-        '''
-    ys = []
-    for i, window in enumerate(X_windows):
-        if i == 0:
-            continue
-        ys.append(window[-1]) 
-    return np.array(ys)
+# def produce_y(X_windows):
+#     ''' y is the first program counter value following the last 
+#         program counter of a window. That's how it was produced in the youtube
+#         tutorial:
+#         https://www.youtube.com/watch?v=H4J74KstHTE
+# 
+#         However, in another example, "y" was simply X, which is natural
+#         for autoencoders:
+#         https://towardsdatascience.com/lstm-autoencoder-for-extreme-rare-event-classification-in-keras-ce209a224cfb
+# 
+#         From my observations, training with "y" equal to X produces the same
+#         results but takes more time.
+#         '''
+#     ys = []
+#     for i, window in enumerate(X_windows):
+#         if i == 0:
+#             continue
+#         ys.append(window[-1]) 
+#     return np.array(ys)
 
 # def temporalize(X, y, lookback):
 #     output_X = []
@@ -68,7 +211,7 @@ def produce_y(X_windows):
 
 from keras import backend as K
 def root_mean_squared_error(y_true, y_pred):
-        return K.sqrt(K.mean(K.square(y_pred - y_true)))
+    return K.sqrt(K.mean(K.square(y_pred - y_true)))
 
 def create_model(X_train):
     model = keras.Sequential()
@@ -83,6 +226,28 @@ def create_model(X_train):
     model.add(keras.layers.TimeDistributed(keras.layers.Dense(units=X_train.shape[2])))
     model.compile(loss='mae', optimizer='adam')
     return model
+
+
+def get_min_max_lists_for_normalization(X_train):
+    ''' There are multiple lists instead of single values because 
+        "autoencoder forest" method may be used, where multiple 
+        models are created (like an array of models), and each model
+        has its own normalization. '''
+    min_vals = []
+    max_vals = []
+    # X_train = X_train.values
+    for col in X_train:
+        min_vals.append( tf.reduce_min( X_train[col].values ) )
+        max_vals.append( tf.reduce_max( X_train[col].values ) )
+    return min_vals, max_vals
+    
+def normalize_2(X, min_val, max_val):
+    # import pdb; pdb.set_trace()
+    if type(X) == pd.core.frame.DataFrame:
+        X = X.values
+    X = (X - min_val) / (max_val - min_val)
+    X = tf.cast(X, tf.float32)
+    return X
 
 def normalize(X_train, X_test):
     X_train = X_train.values
@@ -124,6 +289,134 @@ def print_table_row(range_index, std_range, train_windows_count, test_windows_co
     line = f'{range_index+1:<3}{std_range_str:<15} {train_windows_count:<5} {test_windows_count:<5}'
 
     logging.info(line)
+
+def train(df_n, window_size=20, epochs=10, number_of_models=6):
+    global min_vals
+    global max_vals
+    global train_window_size
+    global std_ranges
+    global models
+
+    # keep reference to supplied window size, to use the same at testing/predicting
+    train_window_size = window_size
+
+    utils.print_header(f'LSTM AUTOENCODER (window_size={window_size}, number_of_models={number_of_models})')
+
+    X_train = utils.pc_df_to_sliding_windows(df_n, window_size, unique=True)
+    min_vals, max_vals = get_min_max_lists_for_normalization(X_train)
+
+    std_ranges = get_std_ranges(X_train, number_of_models)
+    logging.info(f'The following {number_of_models} standard deviation ranges are going to be used:')
+    for std_range in std_ranges:
+        logging.info(std_range)
+
+    logging.info(f'\nTraining {number_of_models} LSTM autoencoders:')
+    logging.info(f'   {"std range":<15} {"train":<5}')
+    for i, std_range in enumerate(std_ranges):
+        # for testing data, speed isn't a problem (predictions are done relatively fast)
+        # so duplicates don't have to be dropped (which is good because it wouldn't be good for presenting results)
+        X_train_subset = get_windows_subset(X_train, std_range)
+        # X_train_subset, X_test_subset = normalize(X_train_subset, X_test_subset)
+        X_train_subset = normalize_2(X_train_subset, min_vals[i], max_vals[i])
+        # X_test_subset = normalize_2(X_test_subset, min_vals[i], max_vals[i])
+
+        X_train_subset = np.array( X_train_subset ).reshape(-1, window_size, 1)
+        # X_test_subset = np.array( X_test_subset ).reshape(-1, window_size, 1)
+
+        # print_table_row(i, std_range, X_train_subset.shape[0], X_test_subset.shape[0])
+
+        model = create_model(X_train_subset)
+
+        # if there isn't any testing windows having this std range
+        # then there's no need to train the model
+        # if not X_test_subset.any():
+        #     logging.info(f'None of testing windows had standard deviation in range {std_range}')
+        #     continue
+
+        # if there are testing examples, but not training ones,
+        # then model can't be trained and all testing examples
+        # should be marked as anomalous (because they were probably
+        # not present in training)
+        if X_train_subset.any():
+            models.append(model)
+
+            history = model.fit(
+                X_train_subset, X_train_subset,#y_train, #X_train_subset
+                epochs=epochs,
+                batch_size=5000,#32,
+                # validation_split=0.1,
+                shuffle=True,
+                verbose=0 # 0=silent, 1=progress bar, 2=one line per epoch
+                # callbacks=[PlotLossesKeras()]
+            )
+
+            #plt.show()
+            #plt.plot(history.history['loss'], label='train')
+            #plt.plot(history.history['val_loss'], label='test')
+            #plt.legend();
+            #plt.show()
+
+            X_train_pred = model(X_train_subset)
+            train_mae_loss = np.mean(np.abs(X_train_pred - X_train_subset), axis=1)
+            THRESHOLD = train_mae_loss.max()
+            thresholds.append( train_mae_loss.max() )
+
+            # X_test_pred = model(X_test_subset)
+            # test_mae_loss = np.mean(np.abs(X_test_pred - X_test_subset), axis=1)
+
+        else:
+            # None as a model means that any testing examples 
+            # will be classified as anomalies
+            models.append(None)
+
+            # if no training examples were in current std_range
+            # but some testing examples were, then all testing examples
+            # are anomalous
+            logging.info(f'None of training windows had standard deviation in {std_range} range. But some testing windows had, all of them are going to be classified as anomalous (test_mae_loss is forced to be 0.001 and threshold is forced to be 0). subset_indices={subset_indices}')
+            THRESHOLD = 0.0
+            thresholds.append(0.0)
+    # model.save('lstm_autoencoder_model.h5')
+    # logging.info('\nExample model.summary():')
+    # model.summary()
+
+def predict(df_a):
+    global min_vals
+    global max_vals
+    global results_df
+    global std_ranges
+    global models
+    global thresholds
+    global train_window_size
+
+    window_size = train_window_size
+    X_test = utils.pc_df_to_sliding_windows(df_a, window_size)
+    results_df = pd.DataFrame( index=df_a.index.values[:-window_size+1] , columns = ['loss', 'threshold', 'anomaly', 'window_start', 'window_end'])
+
+    for i, std_range in enumerate(std_ranges):
+        model = models[i]
+        threshold = thresholds[i]
+
+        X_test_subset = get_windows_subset(X_test, std_range)
+        subset_indices = X_test_subset.index.values
+        X_test_subset = np.array( X_test_subset ).reshape(-1, window_size, 1)
+
+        # normalize
+        X_test_subset = normalize_2(X_test_subset, min_vals[i], max_vals[i])
+
+        if model:
+            X_test_pred = model(X_test_subset)
+            test_mae_loss = np.mean(np.abs(X_test_pred - X_test_subset), axis=1)
+        else:
+            test_mae_loss = np.array([0.001]*X_test_subset.shape[0])
+
+        results_df['loss'].loc[subset_indices] = test_mae_loss.reshape(-1)
+        results_df['threshold'].loc[subset_indices] = threshold
+        results_df['anomaly'].loc[subset_indices] = results_df['loss'].loc[subset_indices] > results_df['threshold'].loc[subset_indices]
+        results_df['window_start'].loc[subset_indices] = results_df.loc[subset_indices].index.values
+        results_df['window_end'].loc[subset_indices] = results_df['window_start'].loc[subset_indices] + window_size
+
+    anomalies = results_df[results_df.anomaly == True]
+    return results_df, anomalies
 
 def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
     utils.print_header(f'LSTM AUTOENCODER (window_size={window_size}, number_of_models={number_of_models})')
@@ -202,6 +495,7 @@ def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
             #plt.show()
 
             # X_train_pred = model.predict(X_train_subset)
+            # import pdb;pdb.set_trace()
             X_train_pred = model(X_train_subset)
             train_mae_loss = np.mean(np.abs(X_train_pred - X_train_subset), axis=1)
             # X_test_pred = model.predict(X_test_subset)

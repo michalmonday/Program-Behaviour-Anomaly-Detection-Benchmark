@@ -24,7 +24,7 @@ parser.add_argument(
         '-a',
         '--abnormal-pc',
         nargs='+',
-        required=True,
+        required=False,
         metavar='',
         type=argparse.FileType('r'),
         help='Program counter files (.pc) of "unknown/abnormal" programs as outputted by parse_qtrace_log.py'
@@ -37,6 +37,7 @@ parser.add_argument(
         metavar='',
         help='File name containing output of extract_function_ranges_from_llvm_objdump.py'
         )
+
 
 # parser.add_argument(
 #         '--relative-pc',
@@ -120,6 +121,7 @@ import json
 
 import utils
 from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files, plot_vspans, plot_vspans_ranges, print_config
+from utils import Artificial_Anomalies
 from lstm_autoencoder import lstm_autoencoder
 from unique_transitions import unique_transitions
 
@@ -147,20 +149,39 @@ if __name__ == '__main__':
             relative_pc      = conf['data'].getboolean('relative_pc'),
             ignore_non_jumps = conf['data'].getboolean('ignore_non_jumps')
             )
-    df_a = df_from_pc_files(
-            args.abnormal_pc,
-            column_prefix    = 'abnormal: ',
-            relative_pc      = conf['data'].getboolean('relative_pc'),
-            ignore_non_jumps = conf['data'].getboolean('ignore_non_jumps'),
-            load_address     = conf['data'].getint('abnormal_load_address')
-            )
+
+    anomalies_ranges = []
+    pre_anomaly_values = []
+    if args.abnormal_pc:
+        df_a = df_from_pc_files(
+                args.abnormal_pc,
+                column_prefix    = 'abnormal: ',
+                relative_pc      = conf['data'].getboolean('relative_pc'),
+                ignore_non_jumps = conf['data'].getboolean('ignore_non_jumps'),
+                load_address     = conf['data'].getint('abnormal_load_address')
+                )
+    else:
+        df_a = pd.DataFrame()
+        all_anomaly_methods = [
+                Artificial_Anomalies.randomize_section,
+                Artificial_Anomalies.slightly_randomize_section,
+                Artificial_Anomalies.minimal
+                ]
+        # Introduce artificial anomalies
+        for method in all_anomaly_methods:
+                # prev_df_a = df_a.copy()
+                # df_a, anomalies_ranges, pre_anomaly_values = utils.introduce_artificial_anomalies(df_a)
+                # import pdb; pdb.set_trace()
+            for i, column_name in enumerate(df_n):
+                col_a, anomalies_ranges, pre_anomaly_values = method(df_n[column_name].copy())
+                column_name = column_name.replace('normal', f'abnormal_{i}_{method.__name__}')
+                df_a[column_name] = col_a
+
     logging.info(f'Number of normal pc files: {df_n.shape[1]}')
     logging.info(f'Number of abnormal pc files: {df_a.shape[1]}')
-    # Introduce artificial anomalies
-    if conf['data'].getboolean('introduce_artificial_anomalies'):
-        prev_df_a = df_a.copy()
-        df_a, anomalies_ranges, pre_anomaly_values = utils.introduce_artificial_anomalies(df_a)
-        import pdb; pdb.set_trace()
+
+    # if conf['data'].getboolean('introduce_artificial_anomalies'):
+
     # Plot training (normal pc) and testing (abnormal/compromised pc) data
     fig, axs = plt.subplots(2)
     fig.subplots_adjust(hspace=0.43, top=0.835)
@@ -179,7 +200,10 @@ if __name__ == '__main__':
     # Unique transitions
 
     n = conf['unique_transitions'].getint('sequence_size')
-    detected_ut, df_a_detected_points = unique_transitions.detect(df_n, df_a, n=n)
+
+    unique_transitions.train(df_n, n=n)
+    detected_ut, df_a_detected_points = unique_transitions.predict(df_a)
+
     ax3 = plot_pc_timeline(df_a, function_ranges, title=f'UNIQUE TRANSITIONS METHOD (n={n}) RESULTS')
     df_a_detected_points.plot(ax=ax3, color='r', marker='*', markersize=10, linestyle='none', legend=None)
     plot_vspans(ax3, df_a_detected_points.index.values - n+1, n-1, color='red')
@@ -189,7 +213,8 @@ if __name__ == '__main__':
     # LSTM autoencoder
 
     window_size = conf['lstm_autoencoder'].getint('window_size')
-    results_df, anomalies_df = lstm_autoencoder.detect(df_n, df_a, window_size=window_size, epochs=conf['lstm_autoencoder'].getint('epochs'), number_of_models=conf['lstm_autoencoder'].getint('forest_size'))
+    lstm_autoencoder.train(df_n, window_size=window_size, epochs=conf['lstm_autoencoder'].getint('epochs'), number_of_models=conf['lstm_autoencoder'].getint('forest_size'))
+    results_df, anomalies_df = lstm_autoencoder.predict(df_a)
     axs = lstm_autoencoder.plot_results(df_a, results_df, anomalies_df, window_size, fig_title = 'LSTM AUTOENCODER RESULTS', function_ranges=function_ranges)
 
     plt.show()

@@ -6,3 +6,4 @@ log_files/*.log
 log_files/log_archive/*.log
 **/__pycache__
 *.swp
+*.swo

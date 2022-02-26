@@ -185,16 +185,22 @@ def introduce_artificial_anomalies(df):
 class Artificial_Anomalies:
     offset = 100
 
+    # all_methods = [
+    #         __class__.randomize_section,
+    #         __class__.slightly_randomize_section,
+    #         __class__.minimal
+    #         ]
+
     @staticmethod
-    def init(df):
+    def init():
         ''' common variable initialization for all methods '''
         return __class__.offset, [], []
 
     @staticmethod
     def randomize_section(col, section_size=5):
-        ''' EASY TO DETECT
-            set values at index 10,11,12,13,14 to random values '''
-        offset, anomalies_ranges, original_values = __class__.init(df)
+        ''' Easy to detect
+            Set random values within a section '''
+        offset, anomalies_ranges, original_values = __class__.init()
         original_values.append(col[offset-1:offset+section_size+1].copy())
         col[offset:offset+section_size] = np.random.randint(col.min(), col.max(), section_size)
         anomalies_ranges.append((offset-1,offset+section_size))
@@ -206,7 +212,7 @@ class Artificial_Anomalies:
         ''' Harder to detect
             Slightly modify specified section (100:105 by default)
             (by adding or subtracting multiply of 8) '''
-        offset, anomalies_ranges, original_values = __class__.init(df)
+        offset, anomalies_ranges, original_values = __class__.init()
         original_values.append( col[ offset-1:offset+section_size+1 ].copy() )
         col[offset:offset+section_size] += np.random.randint(-3, 3, section_size) * 8 
         anomalies_ranges.append( (offset-1, offset+section_size) )
@@ -217,7 +223,7 @@ class Artificial_Anomalies:
     def minimal(col, to_add=8):
         ''' Hard to detect.
             Modify a single value by adding 8 to it. '''
-        offset, anomalies_ranges, original_values = __class__.init(df)
+        offset, anomalies_ranges, original_values = __class__.init()
 
         original_values.append( col[offset-1:offset+2].copy() )
         col[offset] += to_add
