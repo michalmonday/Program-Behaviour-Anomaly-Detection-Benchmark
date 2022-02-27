@@ -75,8 +75,11 @@ def merge_pc_df_columns(df):
 def pc_df_to_sliding_windows(df, window_size, unique=False):
     ''' df contains a column per each ".pc" file where each row contains
         program counter values '''
-    df = merge_pc_df_columns(df)
-    windows = series_to_sliding_windows(df['all_pc'], window_size)
+    if type(df) == pd.core.series.Series:
+        windows = series_to_sliding_windows(df, window_size)
+    else:
+        df = merge_pc_df_columns(df)
+        windows = series_to_sliding_windows(df['all_pc'], window_size)
     if unique:
         windows = windows.drop_duplicates()
     return windows
@@ -111,7 +114,7 @@ def plot_pc_histogram(df, function_ranges={}, bins=100, function_line_width=0.7,
     ax.set_ylabel('Frequency')
     return ax
     
-def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7, ax=None, title='Timeline of program counters', **plot_kwargs_):
+def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7, ax=None, title='Timeline of program counters', xlabel='Instruction index' , ylabel='Program counter (address)', **plot_kwargs_):
     plot_kwargs = {
             'linewidth':0.7,
             'title': title,
@@ -122,8 +125,8 @@ def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7, ax=None, t
     if ax:
         plot_kwargs['ax'] = ax
     ax = df.plot(**plot_kwargs)
-    ax.set_xlabel('Instruction index')
-    ax.set_ylabel('Program counter (address)')
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     y_start, y_end = ax.get_yticks()[0], ax.get_yticks()[-1]
     ax.get_yaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
     i = 0

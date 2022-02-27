@@ -416,7 +416,11 @@ def predict(df_a):
         results_df['window_end'].loc[subset_indices] = results_df['window_start'].loc[subset_indices] + window_size
 
     anomalies = results_df[results_df.anomaly == True]
-    return results_df, anomalies
+    is_anomalous = not anomalies.empty
+    return is_anomalous, results_df, anomalies
+
+def predict_all(df_a):
+    return [predict(df_a[col_a]) for col_a in df_a]
 
 def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
     utils.print_header(f'LSTM AUTOENCODER (window_size={window_size}, number_of_models={number_of_models})')

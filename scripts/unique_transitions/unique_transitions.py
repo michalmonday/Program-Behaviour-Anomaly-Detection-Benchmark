@@ -91,6 +91,9 @@ def predict(df_a):
     # (it ignores df index so that's why it's ugly)
     # it's from: https://stackoverflow.com/a/50645672/4620679
     # import pdb; pdb.set_trace()
+
+    df_a = pd.DataFrame(df_a)
+
     abnormal_ut = utils.pc_df_to_sliding_windows(df_a, window_size=train_n, unique=True)
     detected_ut = abnormal_ut[ ~abnormal_ut[ ~abnormal_ut.stack().isin(normal_ut.stack().values).unstack()].isna().all(axis=1) ].dropna()
    
@@ -112,8 +115,12 @@ def predict(df_a):
 
     logging.info(f'Test program size: {df_a.shape[0]} instructions')
     logging.info(f'Number of detected anomalies in test program: {df_a_detected_points.shape[0]}')
-    return detected_ut, df_a_detected_points
 
+    is_anomalous = not df_a_detected_points.empty
+    return is_anomalous, detected_ut, df_a_detected_points
+
+def predict_all(df_a):
+    return [predict(df_a[col_a]) for col_a in df_a]
 
 def detect(df_n, df_a, n=2):
     utils.print_header(f'UNIQUE TRANSITIONS (n={n})')

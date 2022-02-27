@@ -38,6 +38,12 @@ parser.add_argument(
         help='File name containing output of extract_function_ranges_from_llvm_objdump.py'
         )
 
+parser.add_argument(
+        '--plot-data',
+        required=False,
+        action='store_true',
+        help='Plots training and testing data'
+        )
 
 # parser.add_argument(
 #         '--relative-pc',
@@ -135,6 +141,39 @@ logging.info(f'Loaded config from: compare_classification_methods_config.ini')
 print_config(conf)
 
 
+def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_values=[]):
+    # Plot training (normal pc) and testing (abnormal/compromised pc) data
+    # import pdb; pdb.set_trace()
+
+    ax = plot_pc_timeline(df_n, function_ranges)
+    ax.set_title('TRAIN DATA', fontsize=20)
+
+    # subplot_columns = 3
+    # subplot_rows = df_a.shape[1] // subplot_columns
+    # fig, axs = plt.subplots(subplot_rows, subplot_columns, sharex=True)#, sharey=True)
+    fig, axs = plt.subplots(df_a.shape[1], sharex=True)#, sharey=True)
+    # fig.subplots_adjust(hspace=0.43, top=0.835)
+    fig.subplots_adjust(hspace=1.4, top=0.835)
+    fig.suptitle('TEST DATA', fontsize=20)
+    # fig.supxlabel('Instruction index')
+    # fig.supylabel('Program counter (address)')
+    fig.text(0.5, 0.04, 'Instruction index', ha='center')
+    fig.text(0.04, 0.5, 'Program counter (address)', va='center', rotation='vertical')
+
+    for i, col_name in enumerate(df_a):
+        # import pdb; pdb.set_trace()
+        # ax = axs[i // subplot_columns][i % subplot_columns]
+        ax = axs[i]
+        plot_pc_timeline(df_a[col_name], function_ranges, ax=ax, title=col_name, xlabel='', ylabel='')
+        # Plot artificial anomalies
+        # if conf['data'].getboolean('introduce_artificial_anomalies'):
+        if not args.abnormal_pc:
+            plot_vspans_ranges(ax, anomalies_ranges[i], color='blue', alpha=0.05)
+            for vals in pre_anomaly_values[i]:
+                vals.plot(ax=ax, color='purple', marker='h', markersize=2, linewidth=0.7, linestyle='dashed')
+                # ax.fill_between(vals.index.values, vals.values, df_a.loc[vals.index].values.reshape(-1), color='r', alpha=0.15)
+                ax.fill_between(vals.index.values, vals.values, df_a.loc[vals.index][col_name].values.reshape(-1), color='r', alpha=0.15)
+
 if __name__ == '__main__':
 
     #########################################
@@ -167,14 +206,29 @@ if __name__ == '__main__':
                 Artificial_Anomalies.slightly_randomize_section,
                 Artificial_Anomalies.minimal
                 ]
-        # Introduce artificial anomalies
+        # Introduce artificial anomalies for all the files, resulting in the following testing examples:
+        # - method 1 with file 1
+        # - method 1 with file 2
+        # - method 2 with file 1
+        # - method 2 with file 2
+        # - method 3 with file 1
+        # - method 3 with file 2
+        # 
+        # Where "method" is a one of the methods from "Artificial_Anomalies" class (e.g. randomize_section, slightly_randomize_section, minimal)
+        # and where "file" is a normal/baseline file containing program counters.
+        # Example above shows only 3 methods and 2 files, but the principle applies for any number.
+        # So with 5 methods and 5 normal pc files there would be 25 testing examples.
         for method in all_anomaly_methods:
-                # prev_df_a = df_a.copy()
-                # df_a, anomalies_ranges, pre_anomaly_values = utils.introduce_artificial_anomalies(df_a)
-                # import pdb; pdb.set_trace()
+
+            # for each normal/baseline append column with introduced anomalies into into "df_a"
             for i, column_name in enumerate(df_n):
-                col_a, anomalies_ranges, pre_anomaly_values = method(df_n[column_name].copy())
-                column_name = column_name.replace('normal', f'abnormal_{i}_{method.__name__}')
+                # introduce anomalies
+                col_a, ar, pav = method(df_n[column_name].copy())
+                # keep record of anomalies and previous values (for plotting later)
+                anomalies_ranges.append(ar)
+                pre_anomaly_values.append(pav)
+                # rename column
+                column_name = column_name.replace('normal', f'{method.__name__}', 1)
                 df_a[column_name] = col_a
 
     logging.info(f'Number of normal pc files: {df_n.shape[1]}')
@@ -182,41 +236,63 @@ if __name__ == '__main__':
 
     # if conf['data'].getboolean('introduce_artificial_anomalies'):
 
-    # Plot training (normal pc) and testing (abnormal/compromised pc) data
-    fig, axs = plt.subplots(2)
-    fig.subplots_adjust(hspace=0.43, top=0.835)
-    fig.suptitle('TRAINING AND TESTING DATA', fontsize=20)
-    ax  = plot_pc_timeline(df_n, function_ranges, ax=axs[0], title='Normal program counters - used for training')
-    ax2 = plot_pc_timeline(df_a, function_ranges, ax=axs[1], title='Abnormal program counters - used for testing')
-    # Plot artificial anomalies
-    if conf['data'].getboolean('introduce_artificial_anomalies'):
-        plot_vspans_ranges(ax2, anomalies_ranges, color='blue', alpha=0.05)
-        for vals in pre_anomaly_values:
-            vals.plot(ax=ax2, color='purple', marker='h', markersize=2, linewidth=0.7, linestyle='dashed')
-            ax2.fill_between(vals.index.values, vals.values, df_a.loc[vals.index].values.reshape(-1), color='r', alpha=0.15)
+    if args.plot_data:
+        plot_data(
+                df_n,
+                df_a,
+                function_ranges=function_ranges,
+                anomalies_ranges=anomalies_ranges,
+                pre_anomaly_values=pre_anomaly_values
+                )
+
 
 
     #########################################
+    # Train all models first
+
     # Unique transitions
-
     n = conf['unique_transitions'].getint('sequence_size')
-
     unique_transitions.train(df_n, n=n)
-    detected_ut, df_a_detected_points = unique_transitions.predict(df_a)
 
-    ax3 = plot_pc_timeline(df_a, function_ranges, title=f'UNIQUE TRANSITIONS METHOD (n={n}) RESULTS')
-    df_a_detected_points.plot(ax=ax3, color='r', marker='*', markersize=10, linestyle='none', legend=None)
-    plot_vspans(ax3, df_a_detected_points.index.values - n+1, n-1, color='red')
-
-
-    #########################################
     # LSTM autoencoder
-
     window_size = conf['lstm_autoencoder'].getint('window_size')
     lstm_autoencoder.train(df_n, window_size=window_size, epochs=conf['lstm_autoencoder'].getint('epochs'), number_of_models=conf['lstm_autoencoder'].getint('forest_size'))
-    results_df, anomalies_df = lstm_autoencoder.predict(df_a)
-    axs = lstm_autoencoder.plot_results(df_a, results_df, anomalies_df, window_size, fig_title = 'LSTM AUTOENCODER RESULTS', function_ranges=function_ranges)
+
+    # results_ua is a list of tuples where each tuple has:
+    # - is_anomaly (bool)
+    # - detected_ut (set of unique transitions)
+    # - df_a_detected_points (collection indicating where detected_ut were foundin anomalous data)
+    results_ut = unique_transitions.predict_all(df_a)
+    accuracy_ut = sum(is_anomaly for is_anomaly,_,_ in results_ut) / df_a.shape[1]
+
+    # results_lstm is a list of tuples where each tuple has:
+    # - is_anomaly (bool)
+    # - results_df (df with columns: loss, threshold, anomaly, window_start, window_end)
+    # - anomalies_df (just like results_df but only containing rows for anomalous windows)
+    results_lstm = lstm_autoencoder.predict_all(df_a)
+    accuracy_lstm = sum(is_anomaly for is_anomaly,_,_ in results_lstm) / df_a.shape[1]
+
+    logging.info(f'Unique transitions accuracy: {accuracy_ut:.2f}')
+    logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
 
     plt.show()
+    import pdb; pdb.set_trace()
+
+    #for col_a in df_a:
+    #    #########################################
+    #    # Test models
+
+    #    # Unique transitions
+    #    is_anomalous, detected_ut, df_a_detected_points = unique_transitions.predict(df_a[col_a])
+    #    # ax3 = plot_pc_timeline(df_a, function_ranges, title=f'UNIQUE TRANSITIONS METHOD (n={n}) RESULTS')
+    #    # df_a_detected_points.plot(ax=ax3, color='r', marker='*', markersize=10, linestyle='none', legend=None)
+    #    # plot_vspans(ax3, df_a_detected_points.index.values - n+1, n-1, color='red')
+
+    #    # LSTM autoencoder
+    #    is_anomalous, results_df, anomalies_df = lstm_autoencoder.predict(df_a[col_a])
+    #    # axs = lstm_autoencoder.plot_results(df_a, results_df, anomalies_df, window_size, fig_title = 'LSTM AUTOENCODER RESULTS', function_ranges=function_ranges)
+    #    # import pdb; pdb.set_trace()
+
+    #    # plt.show()
     
 
