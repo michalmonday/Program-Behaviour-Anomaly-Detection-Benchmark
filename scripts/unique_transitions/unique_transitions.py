@@ -113,8 +113,8 @@ def predict(df_a):
     # df_a_detected_points = df_a[ df_a.iloc[:,0].rolling(2).apply(lambda x: ((detected_ut['all_pc'] == x.iloc[0]) & (detected_ut['all_pc_shifted'] == x.iloc[1])).any() ) > 0.0 ]
     df_a_detected_points = df_a[ df_a.iloc[:,0].rolling(train_n).apply(lambda x: was_detected(x) ) > 0.0 ]
 
-    logging.info(f'Test program size: {df_a.shape[0]} instructions')
-    logging.info(f'Number of detected anomalies in test program: {df_a_detected_points.shape[0]}')
+    # logging.info(f'Test program size: {df_a.shape[0]} instructions')
+    # logging.info(f'Number of detected anomalies in test program: {df_a_detected_points.shape[0]}')
 
     is_anomalous = not df_a_detected_points.empty
     return is_anomalous, detected_ut, df_a_detected_points

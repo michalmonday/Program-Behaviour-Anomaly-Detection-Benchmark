@@ -272,6 +272,7 @@ if __name__ == '__main__':
     results_lstm = lstm_autoencoder.predict_all(df_a)
     accuracy_lstm = sum(is_anomaly for is_anomaly,_,_ in results_lstm) / df_a.shape[1]
 
+    logging.info('\n\nResults:')
     logging.info(f'Unique transitions accuracy: {accuracy_ut:.2f}')
     logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
 

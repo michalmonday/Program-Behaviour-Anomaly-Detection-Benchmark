@@ -284,10 +284,11 @@ def get_windows_subset(windows, std_range):
     std = windows.std(axis=1)
     return windows[(std >= std_range[0]) & (std <= std_range[1])]
 
-def print_table_row(range_index, std_range, train_windows_count, test_windows_count):
+def print_table_row(range_index, std_range, train_windows_count, test_windows_count=None):
     std_range_str = f'{round(std_range[0],1)} - {round(std_range[1],1)}'
-    line = f'{range_index+1:<3}{std_range_str:<15} {train_windows_count:<5} {test_windows_count:<5}'
-
+    line = f'{range_index+1:<3}{std_range_str:<15} {train_windows_count:<5}'
+    if test_windows_count != None:
+        line +=  ' {test_windows_count:<5}'
     logging.info(line)
 
 def train(df_n, window_size=20, epochs=10, number_of_models=6):
@@ -323,7 +324,7 @@ def train(df_n, window_size=20, epochs=10, number_of_models=6):
         X_train_subset = np.array( X_train_subset ).reshape(-1, window_size, 1)
         # X_test_subset = np.array( X_test_subset ).reshape(-1, window_size, 1)
 
-        # print_table_row(i, std_range, X_train_subset.shape[0], X_test_subset.shape[0])
+        print_table_row(i, std_range, X_train_subset.shape[0])
 
         model = create_model(X_train_subset)
 
