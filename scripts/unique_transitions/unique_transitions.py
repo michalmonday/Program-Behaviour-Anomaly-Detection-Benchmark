@@ -23,7 +23,6 @@ import logging
 
 import utils
 from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files
-from lstm_autoencoder import lstm_autoencoder
 
 # ax = plot_pc_histogram(df, function_ranges, bins=100)
 # ax2 = plot_pc_timeline(df, function_ranges)
@@ -70,57 +69,55 @@ from lstm_autoencoder import lstm_autoencoder
 #    unique_transitions = df.drop_duplicates()
 #    return unique_transitions
 
-normal_ut = None
-train_n = None
+class Unique_Transitions:
+    def __init__(self):
+        self.normal_ut = None
+        self.train_n = None
 
-def train(df_n, n=2):
-    global normal_ut
-    global train_n
-    utils.print_header(f'UNIQUE TRANSITIONS (n={n})')
-    normal_ut = utils.pc_df_to_sliding_windows(df_n, window_size=n, unique=True)
-    train_n = n
+    def train(self, df_n, n=2):
+        utils.print_header(f'UNIQUE TRANSITIONS (n={n})')
+        self.normal_ut = utils.pc_df_to_sliding_windows(df_n, window_size=n, unique=True)
+        self.train_n = n
 
-    logging.info(f'Number of train programs: {df_n.shape[1]}')
-    logging.info(f'Longest train program size: {df_n.shape[0]} instructions')
-    logging.info(f'Number of unique train sequences (with size of {n}): {normal_ut.shape[0]}')
+        logging.info(f'Number of train programs: {df_n.shape[1]}')
+        logging.info(f'Longest train program size: {df_n.shape[0]} instructions')
+        logging.info(f'Number of unique train sequences (with size of {n}): {self.normal_ut.shape[0]}')
 
-def predict(df_a):
-    global normal_ut
-    global train_n
-    # gets abnormal_ut entries that are not present in normal_ut
-    # (it ignores df index so that's why it's ugly)
-    # it's from: https://stackoverflow.com/a/50645672/4620679
-    # import pdb; pdb.set_trace()
+    def predict(self, df_a):
+        # gets abnormal_ut entries that are not present in normal_ut
+        # (it ignores df index so that's why it's ugly)
+        # it's from: https://stackoverflow.com/a/50645672/4620679
+        # import pdb; pdb.set_trace()
 
-    df_a = pd.DataFrame(df_a)
+        df_a = pd.DataFrame(df_a)
 
-    abnormal_ut = utils.pc_df_to_sliding_windows(df_a, window_size=train_n, unique=True)
-    detected_ut = abnormal_ut[ ~abnormal_ut[ ~abnormal_ut.stack().isin(normal_ut.stack().values).unstack()].isna().all(axis=1) ].dropna()
-   
-    # set is used for fast lookup
-    detected_ut_set = set()
-    for i, row in detected_ut.iterrows():
-        detected_ut_set.add('-'.join(str(v) for v in row.values))
+        abnormal_ut = utils.pc_df_to_sliding_windows(df_a, window_size=self.train_n, unique=True)
+        detected_ut = abnormal_ut[ ~abnormal_ut[ ~abnormal_ut.stack().isin(self.normal_ut.stack().values).unstack()].isna().all(axis=1) ].dropna()
+       
+        # set is used for fast lookup
+        detected_ut_set = set()
+        for i, row in detected_ut.iterrows():
+            detected_ut_set.add('-'.join(str(v) for v in row.values))
 
-    def was_detected(row):
-        return '-'.join(str(v) for v in row.values) in detected_ut_set
+        def was_detected(row):
+            return '-'.join(str(v) for v in row.values) in detected_ut_set
 
-    # At this point, if detected_ut is not empty, it means that abnormal behaviour was detected.
-    # We can further plot where exactly it happened during program execution.
+        # At this point, if detected_ut is not empty, it means that abnormal behaviour was detected.
+        # We can further plot where exactly it happened during program execution.
 
-    # get PC values in abnormal run where unseen transitions (detected_ut) are observed
-    # df_a_col0 =  df_a[df_a.columns[0]]
-    # df_a_detected_points = df_a[ df_a.iloc[:,0].rolling(2).apply(lambda x: ((detected_ut['all_pc'] == x.iloc[0]) & (detected_ut['all_pc_shifted'] == x.iloc[1])).any() ) > 0.0 ]
-    df_a_detected_points = df_a[ df_a.iloc[:,0].rolling(train_n).apply(lambda x: was_detected(x) ) > 0.0 ]
+        # get PC values in abnormal run where unseen transitions (detected_ut) are observed
+        # df_a_col0 =  df_a[df_a.columns[0]]
+        # df_a_detected_points = df_a[ df_a.iloc[:,0].rolling(2).apply(lambda x: ((detected_ut['all_pc'] == x.iloc[0]) & (detected_ut['all_pc_shifted'] == x.iloc[1])).any() ) > 0.0 ]
+        df_a_detected_points = df_a[ df_a.iloc[:,0].rolling(self.train_n).apply(lambda x: was_detected(x) ) > 0.0 ]
 
-    # logging.info(f'Test program size: {df_a.shape[0]} instructions')
-    # logging.info(f'Number of detected anomalies in test program: {df_a_detected_points.shape[0]}')
+        # logging.info(f'Test program size: {df_a.shape[0]} instructions')
+        # logging.info(f'Number of detected anomalies in test program: {df_a_detected_points.shape[0]}')
 
-    is_anomalous = not df_a_detected_points.empty
-    return is_anomalous, detected_ut, df_a_detected_points
+        is_anomalous = not df_a_detected_points.empty
+        return is_anomalous, detected_ut, df_a_detected_points
 
-def predict_all(df_a):
-    return [predict(df_a[col_a]) for col_a in df_a]
+    def predict_all(self, df_a):
+        return [self.predict(df_a[col_a]) for col_a in df_a]
 
 #def detect(df_n, df_a, n=2):
 #    utils.print_header(f'UNIQUE TRANSITIONS (n={n})')

@@ -129,7 +129,8 @@ import utils
 from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files, plot_vspans, plot_vspans_ranges, print_config
 from utils import Artificial_Anomalies
 from lstm_autoencoder import lstm_autoencoder
-from unique_transitions import unique_transitions
+from lstm_autoencoder.lstm_autoencoder import LSTM_Autoencoder
+from unique_transitions.unique_transitions import Unique_Transitions
 
 import logging
 logging.basicConfig(format='%(message)s', level=logging.INFO)
@@ -252,30 +253,32 @@ if __name__ == '__main__':
 
     # Unique transitions
     n = conf['unique_transitions'].getint('sequence_size')
-    unique_transitions.train(df_n, n=n)
+    ut = Unique_Transitions()
+    ut.train(df_n, n=n)
 
     # LSTM autoencoder
     window_size = conf['lstm_autoencoder'].getint('window_size')
-    lstm_autoencoder.train(df_n, window_size=window_size, epochs=conf['lstm_autoencoder'].getint('epochs'), number_of_models=conf['lstm_autoencoder'].getint('forest_size'))
+    la = LSTM_Autoencoder()
+    la.train(df_n, window_size=window_size, epochs=conf['lstm_autoencoder'].getint('epochs'), number_of_models=conf['lstm_autoencoder'].getint('forest_size'))
 
     # results_ua is a list of tuples where each tuple has:
     # - is_anomaly (bool)
     # - detected_ut (set of unique transitions)
     # - df_a_detected_points (collection indicating where detected_ut were foundin anomalous data)
-    results_ut = unique_transitions.predict_all(df_a)
+    results_ut = ut.predict_all(df_a)
     accuracy_ut = sum(is_anomaly for is_anomaly,_,_ in results_ut) / df_a.shape[1]
 
-    results_ut_n = unique_transitions.predict_all(df_n)
+    results_ut_n = ut.predict_all(df_n)
     false_positives_ut = sum(is_anomaly for is_anomaly,_,_ in results_ut_n) / df_n.shape[1]
 
     # results_lstm is a list of tuples where each tuple has:
     # - is_anomaly (bool)
     # - results_df (df with columns: loss, threshold, anomaly, window_start, window_end)
     # - anomalies_df (just like results_df but only containing rows for anomalous windows)
-    results_lstm = lstm_autoencoder.predict_all(df_a)
+    results_lstm = la.predict_all(df_a)
     accuracy_lstm = sum(is_anomaly for is_anomaly,_,_ in results_lstm) / df_a.shape[1]
 
-    results_lstm_n = lstm_autoencoder.predict_all(df_n)
+    results_lstm_n = la.predict_all(df_n)
     false_positives_lstm = sum(is_anomaly for is_anomaly,_,_ in results_lstm_n) / df_n.shape[1]
 
     logging.info('\n\nResults:')
@@ -292,14 +295,14 @@ if __name__ == '__main__':
     #    # Test models
 
     #    # Unique transitions
-    #    is_anomalous, detected_ut, df_a_detected_points = unique_transitions.predict(df_a[col_a])
+    #    is_anomalous, detected_ut, df_a_detected_points = ut.predict(df_a[col_a])
     #    # ax3 = plot_pc_timeline(df_a, function_ranges, title=f'UNIQUE TRANSITIONS METHOD (n={n}) RESULTS')
     #    # df_a_detected_points.plot(ax=ax3, color='r', marker='*', markersize=10, linestyle='none', legend=None)
     #    # plot_vspans(ax3, df_a_detected_points.index.values - n+1, n-1, color='red')
 
     #    # LSTM autoencoder
-    #    is_anomalous, results_df, anomalies_df = lstm_autoencoder.predict(df_a[col_a])
-    #    # axs = lstm_autoencoder.plot_results(df_a, results_df, anomalies_df, window_size, fig_title = 'LSTM AUTOENCODER RESULTS', function_ranges=function_ranges)
+    #    is_anomalous, results_df, anomalies_df = la.predict(df_a[col_a])
+    #    # axs = la.plot_results(df_a, results_df, anomalies_df, window_size, fig_title = 'LSTM AUTOENCODER RESULTS', function_ranges=function_ranges)
     #    # import pdb; pdb.set_trace()
 
     #    # plt.show()
