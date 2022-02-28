@@ -265,6 +265,9 @@ if __name__ == '__main__':
     results_ut = unique_transitions.predict_all(df_a)
     accuracy_ut = sum(is_anomaly for is_anomaly,_,_ in results_ut) / df_a.shape[1]
 
+    results_ut_n = unique_transitions.predict_all(df_n)
+    false_positives_ut = sum(is_anomaly for is_anomaly,_,_ in results_ut_n) / df_n.shape[1]
+
     # results_lstm is a list of tuples where each tuple has:
     # - is_anomaly (bool)
     # - results_df (df with columns: loss, threshold, anomaly, window_start, window_end)
@@ -272,9 +275,14 @@ if __name__ == '__main__':
     results_lstm = lstm_autoencoder.predict_all(df_a)
     accuracy_lstm = sum(is_anomaly for is_anomaly,_,_ in results_lstm) / df_a.shape[1]
 
+    results_lstm_n = lstm_autoencoder.predict_all(df_n)
+    false_positives_lstm = sum(is_anomaly for is_anomaly,_,_ in results_lstm_n) / df_n.shape[1]
+
     logging.info('\n\nResults:')
     logging.info(f'Unique transitions accuracy: {accuracy_ut:.2f}')
-    logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
+    logging.info(f'Unique transitions false positives: {false_positives_ut:.2f}')
+    logging.info(f'\nLSTM autoencoder accuracy: {accuracy_lstm:.2f}')
+    logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')
 
     plt.show()
     import pdb; pdb.set_trace()
