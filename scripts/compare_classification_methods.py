@@ -202,6 +202,7 @@ if __name__ == '__main__':
                 )
     else:
         df_a = pd.DataFrame()
+        df_a_ground_truth = pd.DataFrame()
         all_anomaly_methods = [
                 Artificial_Anomalies.randomize_section,
                 Artificial_Anomalies.slightly_randomize_section,
@@ -224,13 +225,14 @@ if __name__ == '__main__':
             # for each normal/baseline append column with introduced anomalies into into "df_a"
             for i, column_name in enumerate(df_n):
                 # introduce anomalies
-                col_a, ar, pav = method(df_n[column_name].copy())
+                col_a, ar, pav, col_a_ground_truth = method(df_n[column_name].copy())
                 # keep record of anomalies and previous values (for plotting later)
                 anomalies_ranges.append(ar)
                 pre_anomaly_values.append(pav)
                 # rename column
                 column_name = column_name.replace('normal', f'{method.__name__}', 1)
                 df_a[column_name] = col_a
+                df_a_ground_truth[column_name] = col_a_ground_truth
 
     logging.info(f'Number of normal pc files: {df_n.shape[1]}')
     logging.info(f'Number of abnormal pc files: {df_a.shape[1]}')
@@ -247,45 +249,56 @@ if __name__ == '__main__':
                 )
 
 
-
     #########################################
     # Train all models first
 
     # Unique transitions
-    n = conf['unique_transitions'].getint('sequence_size')
-    ut = Unique_Transitions()
-    ut.train(df_n, n=n)
+    # n = conf['unique_transitions'].getint('sequence_size')
+    n_values = [int(n) for n in conf['unique_transitions'].get('sequence_sizes').strip().split(',')]
+    for n in n_values:
+        ut = Unique_Transitions()
+        ut.train(df_n, n=n)
 
+        # results_ua is a list of tuples where each tuple has:
+        # - is_anomaly (bool)
+        # - detected_ut (set of unique transitions)
+        # - df_a_detected_points (collection indicating where detected_ut were foundin anomalous data)
+        results_ut = ut.predict_all(df_a)
+        df_a_ground_truth_windowized = utils.windowize_ground_truth_labels(
+                df_a_ground_truth,
+                n # window/sequence size
+                )
+        import pdb; pdb.set_trace()
+        precision, recall, fscore, support = ut.evaluate_all(results_ut, df_a_ground_truth_windowized)
+
+        # accuracy_ut = sum(is_anomaly for is_anomaly,_,_ in results_ut) / df_a.shape[1]
+        # results_ut_n = ut.predict_all(df_n)
+        # false_positives_ut = sum(is_anomaly for is_anomaly,_,_ in results_ut_n) / df_n.shape[1]
+        logging.info(f'precision={precision[1]:.2f} recall={recall[1]:.2f} support={support[1]:.2f}')
+        # logging.info(f'Unique transitions accuracy: {accuracy_ut:.2f}')
+        # logging.info(f'Unique transitions false positives: {false_positives_ut:.2f}')
+
+    exit(0)
     # LSTM autoencoder
-    window_size = conf['lstm_autoencoder'].getint('window_size')
-    la = LSTM_Autoencoder()
-    la.train(df_n, window_size=window_size, epochs=conf['lstm_autoencoder'].getint('epochs'), number_of_models=conf['lstm_autoencoder'].getint('forest_size'))
+    # window_size = conf['lstm_autoencoder'].getint('window_size')
+    window_sizes = [int(ws) for ws in conf['lstm_autoencoder'].get('window_sizes').strip().split(',')]
+    for window_size in window_sizes:
+        la = LSTM_Autoencoder()
+        la.train(df_n, window_size=window_size, epochs=conf['lstm_autoencoder'].getint('epochs'), number_of_models=conf['lstm_autoencoder'].getint('forest_size'))
 
-    # results_ua is a list of tuples where each tuple has:
-    # - is_anomaly (bool)
-    # - detected_ut (set of unique transitions)
-    # - df_a_detected_points (collection indicating where detected_ut were foundin anomalous data)
-    results_ut = ut.predict_all(df_a)
-    accuracy_ut = sum(is_anomaly for is_anomaly,_,_ in results_ut) / df_a.shape[1]
+        # results_lstm is a list of tuples where each tuple has:
+        # - is_anomaly (bool)
+        # - results_df (df with columns: loss, threshold, anomaly, window_start, window_end)
+        # - anomalies_df (just like results_df but only containing rows for anomalous windows)
+        results_lstm = la.predict_all(df_a)
+        accuracy_lstm = sum(is_anomaly for is_anomaly,_,_ in results_lstm) / df_a.shape[1]
 
-    results_ut_n = ut.predict_all(df_n)
-    false_positives_ut = sum(is_anomaly for is_anomaly,_,_ in results_ut_n) / df_n.shape[1]
+        results_lstm_n = la.predict_all(df_n)
+        false_positives_lstm = sum(is_anomaly for is_anomaly,_,_ in results_lstm_n) / df_n.shape[1]
 
-    # results_lstm is a list of tuples where each tuple has:
-    # - is_anomaly (bool)
-    # - results_df (df with columns: loss, threshold, anomaly, window_start, window_end)
-    # - anomalies_df (just like results_df but only containing rows for anomalous windows)
-    results_lstm = la.predict_all(df_a)
-    accuracy_lstm = sum(is_anomaly for is_anomaly,_,_ in results_lstm) / df_a.shape[1]
-
-    results_lstm_n = la.predict_all(df_n)
-    false_positives_lstm = sum(is_anomaly for is_anomaly,_,_ in results_lstm_n) / df_n.shape[1]
-
-    logging.info('\n\nResults:')
-    logging.info(f'Unique transitions accuracy: {accuracy_ut:.2f}')
-    logging.info(f'Unique transitions false positives: {false_positives_ut:.2f}')
-    logging.info(f'\nLSTM autoencoder accuracy: {accuracy_lstm:.2f}')
-    logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')
+        logging.info(f'window_size = {window_size}')
+        logging.info(f'\nLSTM autoencoder accuracy: {accuracy_lstm:.2f}')
+        logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')
 
     plt.show()
     import pdb; pdb.set_trace()

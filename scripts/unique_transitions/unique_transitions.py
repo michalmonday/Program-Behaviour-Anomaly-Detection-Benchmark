@@ -16,6 +16,9 @@ import json
 import os
 import sys
 import inspect
+from sklearn.metrics import precision_recall_fscore_support
+
+
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir) 
@@ -89,35 +92,67 @@ class Unique_Transitions:
         # it's from: https://stackoverflow.com/a/50645672/4620679
         # import pdb; pdb.set_trace()
 
-        df_a = pd.DataFrame(df_a)
+        col_a = pd.DataFrame(df_a)
 
-        abnormal_ut = utils.pc_df_to_sliding_windows(df_a, window_size=self.train_n, unique=True)
+        abnormal_ut = utils.pc_df_to_sliding_windows(col_a, window_size=self.train_n, unique=True)
         detected_ut = abnormal_ut[ ~abnormal_ut[ ~abnormal_ut.stack().isin(self.normal_ut.stack().values).unstack()].isna().all(axis=1) ].dropna()
        
         # set is used for fast lookup
         detected_ut_set = set()
-        for i, row in detected_ut.iterrows():
-            detected_ut_set.add('-'.join(str(v) for v in row.values))
+
+        def window_to_str(row):
+            ''' strings are used (stored as a set) to make the lookup fast and easy '''
+            return '-'.join(str(v) for v in row.values)
 
         def was_detected(row):
-            return '-'.join(str(v) for v in row.values) in detected_ut_set
+            window_str = window_to_str(row)
+            # logging.info(f'window_str={window_str}')
+            return window_str  in detected_ut_set
 
-        # At this point, if detected_ut is not empty, it means that abnormal behaviour was detected.
-        # We can further plot where exactly it happened during program execution.
+        for i, row in detected_ut.iterrows():
+            detected_ut_set.add( window_to_str(row) )
 
         # get PC values in abnormal run where unseen transitions (detected_ut) are observed
-        # df_a_col0 =  df_a[df_a.columns[0]]
-        # df_a_detected_points = df_a[ df_a.iloc[:,0].rolling(2).apply(lambda x: ((detected_ut['all_pc'] == x.iloc[0]) & (detected_ut['all_pc_shifted'] == x.iloc[1])).any() ) > 0.0 ]
-        df_a_detected_points = df_a[ df_a.iloc[:,0].rolling(self.train_n).apply(lambda x: was_detected(x) ) > 0.0 ]
+        # col_a_detected_points = col_a[ col_a.iloc[:,0].rolling(self.train_n).apply(lambda x: was_detected(x) ) > 0.0 ]
 
-        # logging.info(f'Test program size: {df_a.shape[0]} instructions')
-        # logging.info(f'Number of detected anomalies in test program: {df_a_detected_points.shape[0]}')
-
-        is_anomalous = not df_a_detected_points.empty
-        return is_anomalous, detected_ut, df_a_detected_points
+        # col_a['detected_anomaly'] = col_a.iloc[:,0].rolling(self.train_n).apply(lambda x: was_detected(x) ) > 0.0
+        # return col_a
+        results = col_a.iloc[:,0].rolling(self.train_n).apply(lambda x: was_detected(x) ).dropna() > 0.0
+        # import pdb; pdb.set_trace()
+        return results
 
     def predict_all(self, df_a):
         return [self.predict(df_a[col_a]) for col_a in df_a]
+
+    #def evaluate(self, col_a, col_a_ground_truth):
+    #    ''' results = return of predict function '''
+    #    # cm = confusion_matrix(col_a['detected_anomaly'].values, col_a_ground_truth.values)
+
+    #    # support means how many normal/anomalous datapoints there were
+    #    precision, recall, fscore, support = precision_recall_fscore_support(col_a['detected_anomaly'].values, col_a_ground_truth.values)
+    #    return precision, recall, fscore, support 
+
+
+    def evaluate_all(self, results_all, df_a_ground_truth_windowized):
+        ''' results_all = return of predict_all function '''
+        # results = []
+        # for col_a, col_a_name in zip(results_all, df_a_ground_truth):
+        #     result = self.evaluate(col_a, df_a_ground_truth[col_a_name])
+        #     results.append(result)
+
+        
+        # windowize the ground truth labels (so they determine if the whole window/sequence was anomalous)
+        # 
+
+        # concatinate detection results and ground truth labels from 
+        # all test examples (in other words, flatten nested list)
+        all_detection_results = [val for results in results_all for val in results]
+        all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()[['melted']].values.reshape(-1).tolist()
+        precision, recall, fscore, support = precision_recall_fscore_support(all_detection_results, all_ground_truth)
+        return precision, recall, fscore, support
+        # now do something meaningful with all results
+
+
 
 #def detect(df_n, df_a, n=2):
 #    utils.print_header(f'UNIQUE TRANSITIONS (n={n})')

@@ -198,6 +198,7 @@ class Artificial_Anomalies:
     def init():
         ''' common variable initialization for all methods '''
         return __class__.offset, [], []
+    
 
     @staticmethod
     def randomize_section(col, section_size=5):
@@ -207,7 +208,13 @@ class Artificial_Anomalies:
         original_values.append(col[offset-1:offset+section_size+1].copy())
         col[offset:offset+section_size] = np.random.randint(col.min(), col.max(), section_size)
         anomalies_ranges.append((offset-1,offset+section_size))
-        return col, anomalies_ranges, original_values
+        # col_ground_truth = pd.Series(index=col.index, dtype=bool)
+
+        # copy original column to preserve NaN 
+        col_ground_truth = col.copy()
+        col_ground_truth[ ~col_ground_truth.isnull() ] = False
+        col_ground_truth[offset : offset + section_size] = True
+        return col, anomalies_ranges, original_values, col_ground_truth
 
 
     @staticmethod 
@@ -219,7 +226,13 @@ class Artificial_Anomalies:
         original_values.append( col[ offset-1:offset+section_size+1 ].copy() )
         col[offset:offset+section_size] += np.random.randint(-3, 3, section_size) * 8 
         anomalies_ranges.append( (offset-1, offset+section_size) )
-        return col, anomalies_ranges, original_values
+        # col_ground_truth = pd.Series(index=col.index, dtype=bool)
+
+        # copy original column to preserve NaN 
+        col_ground_truth = col.copy()
+        col_ground_truth[ ~col_ground_truth.isnull() ] = False
+        col_ground_truth[offset : offset + section_size] = True
+        return col, anomalies_ranges, original_values, col_ground_truth
 
 
     @staticmethod
@@ -231,7 +244,14 @@ class Artificial_Anomalies:
         original_values.append( col[offset-1:offset+2].copy() )
         col[offset] += to_add
         anomalies_ranges.append( (offset-1, offset+1) )
-        return col, anomalies_ranges, original_values
+
+        # col_ground_truth = pd.Series(index=col.index, dtype=bool)
+
+        # copy original column to preserve NaN 
+        col_ground_truth = col.copy()
+        col_ground_truth[ ~col_ground_truth.isnull() ] = False
+        col_ground_truth[offset : offset + 1] = True
+        return col, anomalies_ranges, original_values, col_ground_truth
 
 
 def print_config(c):
@@ -248,4 +268,10 @@ def print_header(h):
     logging.info('\n\n' + "#" * size)
     logging.info("#{0:^{size}}\n".format(h, size=size))
     # logging.info("#" * 20)
+
+def windowize_ground_truth_labels(ground_truth_labels, window_size):
+    ''' When using sliding_window '''
+    return ground_truth_labels.rolling(window_size).apply(any)
+
+
 
