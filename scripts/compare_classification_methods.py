@@ -253,18 +253,18 @@ if __name__ == '__main__':
     # Train all models first
 
     # Unique transitions
-    # n = conf['unique_transitions'].getint('sequence_size')
-    n_values = [int(n) for n in conf['unique_transitions'].get('sequence_sizes').strip().split(',')]
-    for n in n_values:
+    # seq_size = conf['unique_transitions'].getint('sequence_size')
+    sequence_sizes = [int(seq_size) for seq_size in conf['unique_transitions'].get('sequence_sizes').strip().split(',')]
+    for seq_size in sequence_sizes:
         ut = Unique_Transitions()
-        ut.train(df_n, n=n)
+        ut.train(df_n, n=seq_size)
 
         # results_ua is a list of boolean lists for each file
         # where True=anomaly, False=normal
         results_ut = ut.predict_all(df_a)
         df_a_ground_truth_windowized = utils.windowize_ground_truth_labels(
                 df_a_ground_truth,
-                n # window/sequence size
+                seq_size # window/sequence size
                 )
 
         # anomaly_recall = what percent of anomalies will get detected
@@ -287,14 +287,15 @@ if __name__ == '__main__':
         # - results_df (df with columns: loss, threshold, anomaly, window_start, window_end)
         # - anomalies_df (just like results_df but only containing rows for anomalous windows)
         results_lstm = la.predict_all(df_a)
-        accuracy_lstm = sum(is_anomaly for is_anomaly,_,_ in results_lstm) / df_a.shape[1]
-
-        results_lstm_n = la.predict_all(df_n)
-        false_positives_lstm = sum(is_anomaly for is_anomaly,_,_ in results_lstm_n) / df_n.shape[1]
-
-        logging.info(f'window_size = {window_size}')
-        logging.info(f'\nLSTM autoencoder accuracy: {accuracy_lstm:.2f}')
-        logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')
+        df_a_ground_truth_windowized = utils.windowize_ground_truth_labels(
+                df_a_ground_truth,
+                window_size 
+                )
+        # import pdb; pdb.set_trace()
+        anomaly_recall, inverse_normal_recall = la.evaluate_all(results_lstm, df_a_ground_truth_windowized)
+        logging.info(f'anomaly_recall={anomaly_recall:.2f} inverse_normal_recall={inverse_normal_recall}')
+        # logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
+        # logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')
 
     plt.show()
     import pdb; pdb.set_trace()

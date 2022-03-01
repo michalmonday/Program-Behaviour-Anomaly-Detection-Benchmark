@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 import pandas as pd
+pd.options.mode.chained_assignment = None
 # import seaborn as sns
 from pylab import rcParams
 import matplotlib.pyplot as plt
@@ -13,6 +14,7 @@ from pandas.plotting import register_matplotlib_converters
 import glob
 # from livelossplot import PlotLossesKeras
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import precision_recall_fscore_support
 
 import os
 import sys
@@ -300,18 +302,18 @@ class LSTM_Autoencoder:
         X_train = utils.pc_df_to_sliding_windows(df_n, self.window_size, unique=True)
         self.assign_min_max_for_normalization(X_train)
         self.std_ranges = self.get_std_ranges(X_train, number_of_models)
-        logging.info(f'The following {number_of_models} standard deviation ranges are going to be used:')
-        for std_range in self.std_ranges:
-            logging.info(std_range)
-        logging.info(f'\nTraining {number_of_models} LSTM autoencoders:')
-        logging.info(f'   {"std range":<15} {"train":<5}')
+        # logging.info(f'The following {number_of_models} standard deviation ranges are going to be used:')
+        # for std_range in self.std_ranges:
+        #     logging.info(std_range)
+        # logging.info(f'\nTraining {number_of_models} LSTM autoencoders:')
+        # logging.info(f'   {"std range":<15} {"train":<5}')
         for i, std_range in enumerate(self.std_ranges):
             # for testing data, speed isn't a problem (predictions are done relatively fast)
             # so duplicates don't have to be dropped (which is good because it wouldn't be good for presenting results)
             X_train_subset = get_windows_subset(X_train, std_range)
             X_train_subset = self.normalize(X_train_subset)
             X_train_subset = np.array( X_train_subset ).reshape(-1, self.window_size, 1)
-            print_table_row(i, std_range, X_train_subset.shape[0])
+            # print_table_row(i, std_range, X_train_subset.shape[0])
             model = create_model(X_train_subset)
 
             # if there isn't any testing windows having this std range
@@ -361,8 +363,9 @@ class LSTM_Autoencoder:
         # model.summary()
 
     def predict(self, df_a):
+        df_a = df_a.dropna()
         X_test = utils.pc_df_to_sliding_windows(df_a, self.window_size)
-        results_df = pd.DataFrame( index=df_a.index.values[:-self.window_size+1] , columns = ['loss', 'threshold', 'anomaly', 'window_start', 'window_end'])
+        results_df = pd.DataFrame(np.NaN, index=df_a.index.values[:-self.window_size+1] , columns = ['loss', 'threshold', 'anomaly', 'window_start', 'window_end'])
         for i, std_range in enumerate(self.std_ranges):
             model = self.models[i]
             threshold = self.thresholds[i]
@@ -381,12 +384,46 @@ class LSTM_Autoencoder:
             results_df['anomaly'].loc[subset_indices] = results_df['loss'].loc[subset_indices] > results_df['threshold'].loc[subset_indices]
             results_df['window_start'].loc[subset_indices] = results_df.loc[subset_indices].index.values
             results_df['window_end'].loc[subset_indices] = results_df['window_start'].loc[subset_indices] + self.window_size
-        anomalies = results_df[results_df.anomaly == True]
-        is_anomalous = not anomalies.empty
-        return is_anomalous, results_df, anomalies
+        # anomalies = results_df[results_df.anomaly == True]
+        # is_anomalous = not anomalies.empty
+        # return is_anomalous, results_df, anomalies
+        # import pdb; pdb.set_trace()
+        return results_df.anomaly.dropna().values.tolist()
 
     def predict_all(self, df_a):
         return [self.predict(df_a[col_a]) for col_a in df_a]
+
+    def evaluate_all(self, results_all, df_a_ground_truth_windowized):
+        ''' results_all = return of predict_all function 
+            This function returns 2 evaluation metrics that really matter
+            for anomaly detection systems:
+            - anomaly recall
+            - false anomalies (referred to as "false positives" in some papers)
+        '''
+        # results = []
+        # for col_a, col_a_name in zip(results_all, df_a_ground_truth):
+        #     result = self.evaluate(col_a, df_a_ground_truth[col_a_name])
+        #     results.append(result)
+
+        
+        # windowize the ground truth labels (so they determine if the whole window/sequence was anomalous)
+        # 
+
+        # concatinate detection results and ground truth labels from 
+        # all test examples (in other words, flatten nested list)
+        all_detection_results = [val for results in results_all for val in results]
+        all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()[['melted']].values.reshape(-1).tolist()
+       
+        # all_detection_results[0] = True # TODO: DELETE (it allowed verifying correctness of evaluation metrics)
+
+        # import pdb; pdb.set_trace()
+        precision, recall, fscore, support = precision_recall_fscore_support(all_ground_truth, all_detection_results)
+
+        # what percent of anomalies will get detected
+        anomaly_recall = recall[1]
+        # what percent of normal program behaviour will be classified as anomalous
+        inverse_normal_recall = 1 - recall[0]
+        return anomaly_recall, inverse_normal_recall
 
 #def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
 #    utils.print_header(f'LSTM AUTOENCODER (window_size={window_size}, number_of_models={number_of_models})')
