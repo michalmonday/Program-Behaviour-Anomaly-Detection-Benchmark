@@ -118,7 +118,6 @@ class Unique_Transitions:
         # col_a['detected_anomaly'] = col_a.iloc[:,0].rolling(self.train_n).apply(lambda x: was_detected(x) ) > 0.0
         # return col_a
         results = col_a.iloc[:,0].rolling(self.train_n).apply(lambda x: was_detected(x) ).dropna() > 0.0
-        # import pdb; pdb.set_trace()
         return results
 
     def predict_all(self, df_a):
@@ -134,7 +133,12 @@ class Unique_Transitions:
 
 
     def evaluate_all(self, results_all, df_a_ground_truth_windowized):
-        ''' results_all = return of predict_all function '''
+        ''' results_all = return of predict_all function 
+            This function returns 2 evaluation metrics that really matter
+            for anomaly detection systems:
+            - anomaly recall
+            - false anomalies (referred to as "false positives" in some papers)
+        '''
         # results = []
         # for col_a, col_a_name in zip(results_all, df_a_ground_truth):
         #     result = self.evaluate(col_a, df_a_ground_truth[col_a_name])
@@ -148,11 +152,31 @@ class Unique_Transitions:
         # all test examples (in other words, flatten nested list)
         all_detection_results = [val for results in results_all for val in results]
         all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()[['melted']].values.reshape(-1).tolist()
-        precision, recall, fscore, support = precision_recall_fscore_support(all_detection_results, all_ground_truth)
-        return precision, recall, fscore, support
-        # now do something meaningful with all results
+       
+        # all_detection_results[0] = True # TODO: DELETE (it allowed verifying correctness of evaluation metrics)
 
+        precision, recall, fscore, support = precision_recall_fscore_support(all_ground_truth, all_detection_results)
 
+        # what percent of anomalies will get detected
+        anomaly_recall = recall[1]
+        # what percent of normal program behaviour will be classified as anomalous
+        inverse_normal_recall = 1 - recall[0]
+        return anomaly_recall, inverse_normal_recall
+
+#         gt_counts = all_ground_truth.value_counts()
+#         pred_counts = all_detection_results.value_counts()
+# 
+#         # 4 numbers that can calculate any evaluation metrics
+#         gt_normal_count = gt_counts[False]
+#         gt_anomalous_count = gt_counts[True]
+#         pred_normal_count = pred_counts[False]
+#         pred_anomalous_count = pred_counts[True]
+# 
+#         # all_detection_results = all_detection_results.values.tolist()
+#         # all_ground_truth = all_ground_truth.values.tolist()
+# 
+#         return anomal, normal_classified_as_anomaly
+# 
 
 #def detect(df_n, df_a, n=2):
 #    utils.print_header(f'UNIQUE TRANSITIONS (n={n})')

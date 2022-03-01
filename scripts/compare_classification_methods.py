@@ -202,7 +202,7 @@ if __name__ == '__main__':
                 )
     else:
         df_a = pd.DataFrame()
-        df_a_ground_truth = pd.DataFrame()
+        df_a_ground_truth = pd.DataFrame(dtype=bool)
         all_anomaly_methods = [
                 Artificial_Anomalies.randomize_section,
                 Artificial_Anomalies.slightly_randomize_section,
@@ -259,26 +259,22 @@ if __name__ == '__main__':
         ut = Unique_Transitions()
         ut.train(df_n, n=n)
 
-        # results_ua is a list of tuples where each tuple has:
-        # - is_anomaly (bool)
-        # - detected_ut (set of unique transitions)
-        # - df_a_detected_points (collection indicating where detected_ut were foundin anomalous data)
+        # results_ua is a list of boolean lists for each file
+        # where True=anomaly, False=normal
         results_ut = ut.predict_all(df_a)
         df_a_ground_truth_windowized = utils.windowize_ground_truth_labels(
                 df_a_ground_truth,
                 n # window/sequence size
                 )
-        import pdb; pdb.set_trace()
-        precision, recall, fscore, support = ut.evaluate_all(results_ut, df_a_ground_truth_windowized)
 
-        # accuracy_ut = sum(is_anomaly for is_anomaly,_,_ in results_ut) / df_a.shape[1]
-        # results_ut_n = ut.predict_all(df_n)
-        # false_positives_ut = sum(is_anomaly for is_anomaly,_,_ in results_ut_n) / df_n.shape[1]
-        logging.info(f'precision={precision[1]:.2f} recall={recall[1]:.2f} support={support[1]:.2f}')
-        # logging.info(f'Unique transitions accuracy: {accuracy_ut:.2f}')
-        # logging.info(f'Unique transitions false positives: {false_positives_ut:.2f}')
+        # anomaly_recall = what percent of anomalies will get detected
+        # inverse_normal_recall = what percent of normal program behaviour 
+        #                         will be classified as anomalous, which is 
+        #                         referred to as "false positives" in other
+        #                         papers (about anomaly detection)
+        anomaly_recall, inverse_normal_recall = ut.evaluate_all(results_ut, df_a_ground_truth_windowized)
+        logging.info(f'anomaly_recall={anomaly_recall:.2f} inverse_normal_recall={inverse_normal_recall}')
 
-    exit(0)
     # LSTM autoencoder
     # window_size = conf['lstm_autoencoder'].getint('window_size')
     window_sizes = [int(ws) for ws in conf['lstm_autoencoder'].get('window_sizes').strip().split(',')]
