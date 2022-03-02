@@ -221,10 +221,11 @@ if __name__ == '__main__':
         # Example above shows only 3 methods and 2 files, but the principle applies for any number.
         # So with 5 methods and 5 normal pc files there would be 25 testing examples.
 
-        min_offset = conf['data'].getint('artificial_anomalies_min_offset')
-        max_offset = conf['data'].getint('artificial_anomalies_max_offset')
-        offset_count = conf['data'].getint('artificial_anomalies_offsets_count')
-        offsets = np.random.randint(min_offset, max_offset, offset_count)
+        # min_offset = conf['data'].getint('artificial_anomalies_min_offset')
+        # max_offset = conf['data'].getint('artificial_anomalies_max_offset')
+        # offset_count = conf['data'].getint('artificial_anomalies_offsets_count')
+        # offsets = np.random.randint(min_offset, max_offset, offset_count)
+        offsets = [100]
         # import pdb; pdb.set_trace()
         for method in all_anomaly_methods:
 

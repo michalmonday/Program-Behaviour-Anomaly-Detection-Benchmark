@@ -151,9 +151,29 @@ class Unique_Transitions:
         # concatinate detection results and ground truth labels from 
         # all test examples (in other words, flatten nested list)
         all_detection_results = [val for results in results_all for val in results]
-        all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()[['melted']].values.reshape(-1).tolist()
+        # all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()[['melted']].values.reshape(-1).tolist()
+        
+        # get indices of all consecutive duplicates (NOTE: that are True only)
+        
+
+        x = df_a_ground_truth_windowized
+        non_consecutive_anomalies = x[ x.shift(1) == x ] != True
+        df_a_ground_truth_windowized = df_a_ground_truth_windowized[non_consecutive_anomalies]
+        # consecutive_duplicates_indices = s[s==True].index.values
+        # s = (x[ x.shift(1) == x ] == True).iloc[:,0]
+        # consecutive_duplicates_indices = s[s==True].index.values
+
+        all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()[['melted']]#.values.reshape(-1).tolist()
+        import pdb; pdb.set_trace()
+        consecutive_duplicates = all_ground_truth.loc[all_ground_truth.shift(-1) != all_ground_truth]
+        consecutive_duplicates_true_only = consecutive_duplicates[ consecutive_duplicates == True ]
+
+       
+
+
        
         # all_detection_results[0] = True # TODO: DELETE (it allowed verifying correctness of evaluation metrics)
+
 
         precision, recall, fscore, support = precision_recall_fscore_support(all_ground_truth, all_detection_results)
 
