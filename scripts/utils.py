@@ -185,8 +185,9 @@ def introduce_artificial_anomalies(df):
     anomalies_ranges.append((110-1, 110+1))
     return df, anomalies_ranges, original_values
 
+default_offset = 100
 class Artificial_Anomalies:
-    offset = 100
+    
 
     # all_methods = [
     #         __class__.randomize_section,
@@ -195,16 +196,10 @@ class Artificial_Anomalies:
     #         ]
 
     @staticmethod
-    def init():
-        ''' common variable initialization for all methods '''
-        return __class__.offset, [], []
-    
-
-    @staticmethod
-    def randomize_section(col, section_size=5):
+    def randomize_section(col, section_size=5, offset=default_offset):
         ''' Easy to detect
             Set random values within a section '''
-        offset, anomalies_ranges, original_values = __class__.init()
+        anomalies_ranges, original_values = ([], [])
         original_values.append(col[offset-1:offset+section_size+1].copy())
         col[offset:offset+section_size] = np.random.randint(col.min(), col.max(), section_size)
         anomalies_ranges.append((offset-1,offset+section_size))
@@ -218,11 +213,11 @@ class Artificial_Anomalies:
 
 
     @staticmethod 
-    def slightly_randomize_section(col, section_size=5):
+    def slightly_randomize_section(col, section_size=5, offset=default_offset):
         ''' Harder to detect
             Slightly modify specified section (100:105 by default)
             (by adding or subtracting multiply of 8) '''
-        offset, anomalies_ranges, original_values = __class__.init()
+        anomalies_ranges, original_values = ([], [])
         original_values.append( col[ offset-1:offset+section_size+1 ].copy() )
         col[offset:offset+section_size] += np.random.randint(-3, 3, section_size) * 8 
         anomalies_ranges.append( (offset-1, offset+section_size) )
@@ -236,10 +231,10 @@ class Artificial_Anomalies:
 
 
     @staticmethod
-    def minimal(col, to_add=8):
+    def minimal(col, to_add=8, offset=default_offset):
         ''' Hard to detect.
             Modify a single value by adding 8 to it. '''
-        offset, anomalies_ranges, original_values = __class__.init()
+        anomalies_ranges, original_values = ([], [])
 
         original_values.append( col[offset-1:offset+2].copy() )
         col[offset] += to_add

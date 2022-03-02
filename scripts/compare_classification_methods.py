@@ -220,19 +220,26 @@ if __name__ == '__main__':
         # and where "file" is a normal/baseline file containing program counters.
         # Example above shows only 3 methods and 2 files, but the principle applies for any number.
         # So with 5 methods and 5 normal pc files there would be 25 testing examples.
+
+        min_offset = conf['data'].getint('artificial_anomalies_min_offset')
+        max_offset = conf['data'].getint('artificial_anomalies_max_offset')
+        offset_count = conf['data'].getint('artificial_anomalies_offsets_count')
+        offsets = np.random.randint(min_offset, max_offset, offset_count)
+        # import pdb; pdb.set_trace()
         for method in all_anomaly_methods:
 
             # for each normal/baseline append column with introduced anomalies into into "df_a"
             for i, column_name in enumerate(df_n):
-                # introduce anomalies
-                col_a, ar, pav, col_a_ground_truth = method(df_n[column_name].copy())
-                # keep record of anomalies and previous values (for plotting later)
-                anomalies_ranges.append(ar)
-                pre_anomaly_values.append(pav)
-                # rename column
-                column_name = column_name.replace('normal', f'{method.__name__}', 1)
-                df_a[column_name] = col_a
-                df_a_ground_truth[column_name] = col_a_ground_truth
+                for offset in offsets:
+                    # introduce anomalies
+                    col_a, ar, pav, col_a_ground_truth = method(df_n[column_name].copy(), offset=offset)
+                    # keep record of anomalies and previous values (for plotting later)
+                    anomalies_ranges.append(ar)
+                    pre_anomaly_values.append(pav)
+                    # rename column
+                    new_column_name = column_name.replace('normal', f'{method.__name__}_offset_{offset}', 1)
+                    df_a[new_column_name] = col_a
+                    df_a_ground_truth[new_column_name] = col_a_ground_truth
 
     logging.info(f'Number of normal pc files: {df_n.shape[1]}')
     logging.info(f'Number of abnormal pc files: {df_a.shape[1]}')
@@ -249,53 +256,53 @@ if __name__ == '__main__':
                 )
 
 
-    #########################################
-    # Train all models first
 
-    # Unique transitions
-    # seq_size = conf['unique_transitions'].getint('sequence_size')
-    sequence_sizes = [int(seq_size) for seq_size in conf['unique_transitions'].get('sequence_sizes').strip().split(',')]
-    for seq_size in sequence_sizes:
-        ut = Unique_Transitions()
-        ut.train(df_n, n=seq_size)
+    if conf['unique_transitions'].getboolean('active'):
+        # Unique transitions
+        # seq_size = conf['unique_transitions'].getint('sequence_size')
+        sequence_sizes = [int(seq_size) for seq_size in conf['unique_transitions'].get('sequence_sizes').strip().split(',')]
+        for seq_size in sequence_sizes:
+            ut = Unique_Transitions()
+            ut.train(df_n, n=seq_size)
 
-        # results_ua is a list of boolean lists for each file
-        # where True=anomaly, False=normal
-        results_ut = ut.predict_all(df_a)
-        df_a_ground_truth_windowized = utils.windowize_ground_truth_labels(
-                df_a_ground_truth,
-                seq_size # window/sequence size
-                )
+            # results_ua is a list of boolean lists for each file
+            # where True=anomaly, False=normal
+            results_ut = ut.predict_all(df_a)
+            df_a_ground_truth_windowized = utils.windowize_ground_truth_labels(
+                    df_a_ground_truth,
+                    seq_size # window/sequence size
+                    )
 
-        # anomaly_recall = what percent of anomalies will get detected
-        # inverse_normal_recall = what percent of normal program behaviour 
-        #                         will be classified as anomalous, which is 
-        #                         referred to as "false positives" in other
-        #                         papers (about anomaly detection)
-        anomaly_recall, inverse_normal_recall = ut.evaluate_all(results_ut, df_a_ground_truth_windowized)
-        logging.info(f'anomaly_recall={anomaly_recall:.2f} inverse_normal_recall={inverse_normal_recall}')
+            # anomaly_recall = what percent of anomalies will get detected
+            # inverse_normal_recall = what percent of normal program behaviour 
+            #                         will be classified as anomalous, which is 
+            #                         referred to as "false positives" in other
+            #                         papers (about anomaly detection)
+            anomaly_recall, inverse_normal_recall = ut.evaluate_all(results_ut, df_a_ground_truth_windowized)
+            logging.info(f'anomaly_recall={anomaly_recall:.2f} inverse_normal_recall={inverse_normal_recall}')
 
-    # LSTM autoencoder
-    # window_size = conf['lstm_autoencoder'].getint('window_size')
-    window_sizes = [int(ws) for ws in conf['lstm_autoencoder'].get('window_sizes').strip().split(',')]
-    for window_size in window_sizes:
-        la = LSTM_Autoencoder()
-        la.train(df_n, window_size=window_size, epochs=conf['lstm_autoencoder'].getint('epochs'), number_of_models=conf['lstm_autoencoder'].getint('forest_size'))
+    if conf['lstm_autoencoder'].getboolean('active'):
+        # LSTM autoencoder
+        # window_size = conf['lstm_autoencoder'].getint('window_size')
+        window_sizes = [int(ws) for ws in conf['lstm_autoencoder'].get('window_sizes').strip().split(',')]
+        for window_size in window_sizes:
+            la = LSTM_Autoencoder()
+            la.train(df_n, window_size=window_size, epochs=conf['lstm_autoencoder'].getint('epochs'), number_of_models=conf['lstm_autoencoder'].getint('forest_size'))
 
-        # results_lstm is a list of tuples where each tuple has:
-        # - is_anomaly (bool)
-        # - results_df (df with columns: loss, threshold, anomaly, window_start, window_end)
-        # - anomalies_df (just like results_df but only containing rows for anomalous windows)
-        results_lstm = la.predict_all(df_a)
-        df_a_ground_truth_windowized = utils.windowize_ground_truth_labels(
-                df_a_ground_truth,
-                window_size 
-                )
-        # import pdb; pdb.set_trace()
-        anomaly_recall, inverse_normal_recall = la.evaluate_all(results_lstm, df_a_ground_truth_windowized)
-        logging.info(f'anomaly_recall={anomaly_recall:.2f} inverse_normal_recall={inverse_normal_recall}')
-        # logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
-        # logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')
+            # results_lstm is a list of tuples where each tuple has:
+            # - is_anomaly (bool)
+            # - results_df (df with columns: loss, threshold, anomaly, window_start, window_end)
+            # - anomalies_df (just like results_df but only containing rows for anomalous windows)
+            results_lstm = la.predict_all(df_a)
+            df_a_ground_truth_windowized = utils.windowize_ground_truth_labels(
+                    df_a_ground_truth,
+                    window_size 
+                    )
+            # import pdb; pdb.set_trace()
+            anomaly_recall, inverse_normal_recall = la.evaluate_all(results_lstm, df_a_ground_truth_windowized)
+            logging.info(f'anomaly_recall={anomaly_recall:.2f} inverse_normal_recall={inverse_normal_recall}')
+            # logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
+            # logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')
 
     plt.show()
     import pdb; pdb.set_trace()
