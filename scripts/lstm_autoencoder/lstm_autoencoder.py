@@ -24,9 +24,9 @@ parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir) 
 import utils
 from copy import deepcopy
-from utils import read_pc_values, df_from_pc_files, plot_pc_timeline
 import logging
-
+from utils import read_pc_values, df_from_pc_files, plot_pc_timeline
+from detection_model import Detection_Model
 
 # lstm_autoencoders = []
 # 
@@ -235,7 +235,7 @@ def print_table_row(range_index, std_range, train_windows_count, test_windows_co
     logging.info(line)
 
 
-class LSTM_Autoencoder:
+class LSTM_Autoencoder(Detection_Model):
     def __init__(self):
         # list of min/max values for each autoencoder (within a forest)
         self.min_val = None
@@ -393,37 +393,37 @@ class LSTM_Autoencoder:
     def predict_all(self, df_a):
         return [self.predict(df_a[col_a]) for col_a in df_a]
 
-    def evaluate_all(self, results_all, df_a_ground_truth_windowized):
-        ''' results_all = return of predict_all function 
-            This function returns 2 evaluation metrics that really matter
-            for anomaly detection systems:
-            - anomaly recall
-            - false anomalies (referred to as "false positives" in some papers)
-        '''
-        # results = []
-        # for col_a, col_a_name in zip(results_all, df_a_ground_truth):
-        #     result = self.evaluate(col_a, df_a_ground_truth[col_a_name])
-        #     results.append(result)
+    #def evaluate_all(self, results_all, df_a_ground_truth_windowized):
+    #    ''' results_all = return of predict_all function 
+    #        This function returns 2 evaluation metrics that really matter
+    #        for anomaly detection systems:
+    #        - anomaly recall
+    #        - false anomalies (referred to as "false positives" in some papers)
+    #    '''
+    #    # results = []
+    #    # for col_a, col_a_name in zip(results_all, df_a_ground_truth):
+    #    #     result = self.evaluate(col_a, df_a_ground_truth[col_a_name])
+    #    #     results.append(result)
 
-        
-        # windowize the ground truth labels (so they determine if the whole window/sequence was anomalous)
-        # 
+    #    
+    #    # windowize the ground truth labels (so they determine if the whole window/sequence was anomalous)
+    #    # 
 
-        # concatinate detection results and ground truth labels from 
-        # all test examples (in other words, flatten nested list)
-        all_detection_results = [val for results in results_all for val in results]
-        all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()[['melted']].values.reshape(-1).tolist()
-       
-        # all_detection_results[0] = True # TODO: DELETE (it allowed verifying correctness of evaluation metrics)
+    #    # concatinate detection results and ground truth labels from 
+    #    # all test examples (in other words, flatten nested list)
+    #    all_detection_results = [val for results in results_all for val in results]
+    #    all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()[['melted']].values.reshape(-1).tolist()
+    #   
+    #    # all_detection_results[0] = True # TODO: DELETE (it allowed verifying correctness of evaluation metrics)
 
-        # import pdb; pdb.set_trace()
-        precision, recall, fscore, support = precision_recall_fscore_support(all_ground_truth, all_detection_results)
+    #    # import pdb; pdb.set_trace()
+    #    precision, recall, fscore, support = precision_recall_fscore_support(all_ground_truth, all_detection_results)
 
-        # what percent of anomalies will get detected
-        anomaly_recall = recall[1]
-        # what percent of normal program behaviour will be classified as anomalous
-        inverse_normal_recall = 1 - recall[0]
-        return anomaly_recall, inverse_normal_recall
+    #    # what percent of anomalies will get detected
+    #    anomaly_recall = recall[1]
+    #    # what percent of normal program behaviour will be classified as anomalous
+    #    inverse_normal_recall = 1 - recall[0]
+    #    return anomaly_recall, inverse_normal_recall
 
 #def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
 #    utils.print_header(f'LSTM AUTOENCODER (window_size={window_size}, number_of_models={number_of_models})')

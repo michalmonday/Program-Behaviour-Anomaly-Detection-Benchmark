@@ -1,0 +1,76 @@
+mb19424@cseekdmsim1:/tools/RISC-V/emulator/scripts$ python3 compare_classification_methods.py -n ../log_files/*normal*pc -fr ../log_files/stack-mission_riscv64_llvm_objdump_ranges.json
+Loaded config from: compare_classification_methods_config.ini
+
+
+##################################################
+#                      CONFIG
+
+[data]
+    relative_pc = True
+    ignore_non_jumps = True
+    introduce_artificial_anomalies = True
+    artificial_anomalies_min_offset = 5
+    artificial_anomalies_max_offset = 100
+    artificial_anomalies_offsets_count = 100
+    abnormal_load_address = 4
+
+[unique_transitions]
+    active = True
+    sequence_sizes = 2,5,15
+
+[lstm_autoencoder]
+    active = True
+    window_sizes = 5,15,50
+    forest_size = 30
+    epochs = 50
+
+
+Number of normal pc files: 2
+Number of abnormal pc files: 396
+
+
+##################################################
+#             UNIQUE TRANSITIONS (n=2)
+
+Number of train programs: 2
+Longest train program size: 551 instructions
+Number of unique train sequences (with size of 2): 47
+anomaly_recall=0.94 inverse_normal_recall=0.0
+
+
+##################################################
+#             UNIQUE TRANSITIONS (n=5)
+
+Number of train programs: 2
+Longest train program size: 551 instructions
+Number of unique train sequences (with size of 5): 63
+anomaly_recall=0.94 inverse_normal_recall=0.0
+
+
+##################################################
+#            UNIQUE TRANSITIONS (n=15)
+
+Number of train programs: 2
+Longest train program size: 551 instructions
+Number of unique train sequences (with size of 15): 97
+anomaly_recall=0.94 inverse_normal_recall=0.0
+
+
+#########################################################
+#  LSTM AUTOENCODER (window_size=5, number_of_models=30)
+
+2022-03-03 19:22:30.437972: E tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE: forward compatibility was attempted on non supported HW
+2022-03-03 19:22:30.438178: E tensorflow/stream_executor/cuda/cuda_diagnostics.cc:313] kernel version 440.33.1 does not match DSO version 460.91.3 -- cannot find working devices in this configuration
+anomaly_recall=0.92 inverse_normal_recall=0.0015327784675280842
+
+
+##########################################################
+#  LSTM AUTOENCODER (window_size=15, number_of_models=30)
+
+anomaly_recall=0.83 inverse_normal_recall=0.0013910624239262814
+
+
+##########################################################
+#  LSTM AUTOENCODER (window_size=50, number_of_models=30)
+
+anomaly_recall=0.89 inverse_normal_recall=0.0

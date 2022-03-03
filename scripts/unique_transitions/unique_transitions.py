@@ -26,6 +26,7 @@ import logging
 
 import utils
 from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files
+from detection_model import Detection_Model
 
 # ax = plot_pc_histogram(df, function_ranges, bins=100)
 # ax2 = plot_pc_timeline(df, function_ranges)
@@ -72,7 +73,7 @@ from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_p
 #    unique_transitions = df.drop_duplicates()
 #    return unique_transitions
 
-class Unique_Transitions:
+class Unique_Transitions(Detection_Model):
     def __init__(self):
         self.normal_ut = None
         self.train_n = None
@@ -123,124 +124,6 @@ class Unique_Transitions:
     def predict_all(self, df_a):
         return [self.predict(df_a[col_a]) for col_a in df_a]
 
-    #def evaluate(self, col_a, col_a_ground_truth):
-    #    ''' results = return of predict function '''
-    #    # cm = confusion_matrix(col_a['detected_anomaly'].values, col_a_ground_truth.values)
-
-    #    # support means how many normal/anomalous datapoints there were
-    #    precision, recall, fscore, support = precision_recall_fscore_support(col_a['detected_anomaly'].values, col_a_ground_truth.values)
-    #    return precision, recall, fscore, support 
-
-
-    @staticmethod
-    def get_consecutive_index_groups(series, index_list=[]):
-        ''' This function turns pd.Series like this:
-            101     False
-            102     False
-            652     False
-            653     False
-            654     False
-            1203    False
-            1204    False
-            1205    False
-            1206    False
-
-        Into this:
-            return = [
-                [101 102] ,
-                [652 653 654] ,
-                [1203 1204 1205 1206]
-            ] 
-        '''
-
-        i_series = pd.Series(series.index.values)
-        groups = []
-        for k, g in i_series.groupby(i_series.diff().ne(1).cumsum()):
-            values = g.values
-            if index_list:
-                values = [index_list.index(v) for v in values]
-            groups.append(values)
-        return groups
-
-    def evaluate_all(self, results_all, df_a_ground_truth_windowized):
-        ''' results_all = return of predict_all function 
-            This function returns 2 evaluation metrics that really matter
-            for anomaly detection systems:
-            - anomaly recall
-            - false anomalies (referred to as "false positives" in some papers)
-        '''
-        # results = []
-        # for col_a, col_a_name in zip(results_all, df_a_ground_truth):
-        #     result = self.evaluate(col_a, df_a_ground_truth[col_a_name])
-        #     results.append(result)
-
-        
-        # windowize the ground truth labels (so they determine if the whole window/sequence was anomalous)
-        # 
-
-        # concatinate detection results and ground truth labels from 
-        # all test examples (in other words, flatten nested list)
-        all_detection_results = [val for results in results_all for val in results]
-        # all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()[['melted']].values.reshape(-1).tolist()
-        
-        
-        
-
-        x = df_a_ground_truth_windowized
-        # get indices of all consecutive anomaly duplicates from all runs and merge them together into one pd.Series
-        x = x[ x[ x.shift(1) == x ] == True ].melt(value_name='melted').drop('variable', axis=1)['melted'].dropna()
-        #.reset_index(drop=True)
-        
-
-
-        # df_a_ground_truth_windowized = df_a_ground_truth_windowized[non_consecutive_anomalies]
-        # consecutive_duplicates_indices = s[s==True].index.values
-        # s = (x[ x.shift(1) == x ] == True).iloc[:,0]
-        # consecutive_duplicates_indices = s[s==True].index.values
-
-        all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()['melted']#.values.reshape(-1).tolist()
-        consecutive_index_groups = __class__.get_consecutive_index_groups(x, index_list=all_ground_truth.index.tolist())
-        for group in consecutive_index_groups:
-            # pi = preserved index (of all_detection_results)
-            pi = group[0] - 1
-            if not all_detection_results[pi]:
-                # set the predicted value at the first index of truly anomalous consecutive window sequence to True
-                # if any of the windows (within sequence) was predicted anomalous
-                all_detection_results[pi] = any(all_detection_results[pi:group[-1]+1])
-
-            # set all consecutive anomalous windows to be normal (except the first, preserved index)
-            all_detection_results[group[0]:group[-1]+1] = [False] * len(group)
-            all_ground_truth.iloc[group[0]:group[-1]+1] = False
-            
-
-
-        # all_detection_results[0] = True # TODO: DELETE (it allowed verifying correctness of evaluation metrics)
-
-        all_ground_truth = all_ground_truth.values.reshape(-1).tolist()
-
-        precision, recall, fscore, support = precision_recall_fscore_support(all_ground_truth, all_detection_results)
-
-        # what percent of anomalies will get detected
-        anomaly_recall = recall[1]
-        # what percent of normal program behaviour will be classified as anomalous
-        inverse_normal_recall = 1 - recall[0]
-
-        return anomaly_recall, inverse_normal_recall
-
-#         gt_counts = all_ground_truth.value_counts()
-#         pred_counts = all_detection_results.value_counts()
-# 
-#         # 4 numbers that can calculate any evaluation metrics
-#         gt_normal_count = gt_counts[False]
-#         gt_anomalous_count = gt_counts[True]
-#         pred_normal_count = pred_counts[False]
-#         pred_anomalous_count = pred_counts[True]
-# 
-#         # all_detection_results = all_detection_results.values.tolist()
-#         # all_ground_truth = all_ground_truth.values.tolist()
-# 
-#         return anomal, normal_classified_as_anomaly
-# 
 
 #def detect(df_n, df_a, n=2):
 #    utils.print_header(f'UNIQUE TRANSITIONS (n={n})')
