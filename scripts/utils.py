@@ -195,6 +195,8 @@ class Artificial_Anomalies:
     #         __class__.minimal
     #         ]
 
+    # TODO: Ensure that random values are actually different from the original ones
+
     @staticmethod
     def randomize_section(col, section_size=5, offset=default_offset):
         ''' Easy to detect
@@ -265,8 +267,11 @@ def print_header(h):
     # logging.info("#" * 20)
 
 def windowize_ground_truth_labels(ground_truth_labels, window_size):
-    ''' When using sliding_window '''
-    return ground_truth_labels.rolling(window_size).apply(any)
+    # rolling apply modifies dtype of dataframe for performance 
+    # reasons so later it is converted to bool again
+    gtl = ground_truth_labels.rolling(window_size).apply(any)
+    gtl[gtl.notna()] = gtl.astype(bool)
+    return gtl
 
 
 

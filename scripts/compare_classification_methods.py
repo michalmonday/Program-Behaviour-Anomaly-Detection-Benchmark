@@ -221,6 +221,7 @@ if __name__ == '__main__':
         # Example above shows only 3 methods and 2 files, but the principle applies for any number.
         # So with 5 methods and 5 normal pc files there would be 25 testing examples.
 
+        # Without going into detail, min_offset must be larger than 0
         # min_offset = conf['data'].getint('artificial_anomalies_min_offset')
         # max_offset = conf['data'].getint('artificial_anomalies_max_offset')
         # offset_count = conf['data'].getint('artificial_anomalies_offsets_count')
@@ -299,7 +300,6 @@ if __name__ == '__main__':
                     df_a_ground_truth,
                     window_size 
                     )
-            # import pdb; pdb.set_trace()
             anomaly_recall, inverse_normal_recall = la.evaluate_all(results_lstm, df_a_ground_truth_windowized)
             logging.info(f'anomaly_recall={anomaly_recall:.2f} inverse_normal_recall={inverse_normal_recall}')
             # logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
