@@ -370,6 +370,8 @@ class LSTM_Autoencoder(Detection_Model):
             model = self.models[i]
             threshold = self.thresholds[i]
             X_test_subset = get_windows_subset(X_test, std_range)
+            if X_test_subset.empty:
+                continue
             subset_indices = X_test_subset.index.values
             X_test_subset = np.array( X_test_subset ).reshape(-1, self.window_size, 1)
             # normalize
