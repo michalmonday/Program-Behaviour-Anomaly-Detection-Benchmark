@@ -5,7 +5,7 @@
 
 import pandas as pd
 import numpy as np
-from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 
 class Detection_Model:
     @staticmethod
@@ -40,41 +40,29 @@ class Detection_Model:
 
     def evaluate_all(self, results_all, df_a_ground_truth_windowized):
         ''' results_all = return of predict_all function 
-            This function returns 2 evaluation metrics that really matter
-            for anomaly detection systems:
-            - anomaly recall
-            - false anomalies (referred to as "false positives" in some papers)
-        '''
-        # results = []
-        # for col_a, col_a_name in zip(results_all, df_a_ground_truth):
-        #     result = self.evaluate(col_a, df_a_ground_truth[col_a_name])
-        #     results.append(result)
+            This function returns a dictionary of evaluation metrics:
+            - anomaly_recall
+            - false_positives_ratio
 
-        
-        # windowize the ground truth labels (so they determine if the whole window/sequence was anomalous)
-        # 
+            - anomaly_count
+            - detected_anomaly_count
+            - non_anomaly_count
+            - false_positives
 
+            The returned dictionary can be supplied directly to 
+            "format_evaluation_metrics" method, to make it suitable
+            for printing/logging. '''
         # concatinate detection results and ground truth labels from 
         # all test examples (in other words, flatten nested list)
         all_detection_results = [val for results in results_all for val in results]
-        # all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()[['melted']].values.reshape(-1).tolist()
-        
-        
-        
 
         x = df_a_ground_truth_windowized
         # get indices of all consecutive anomaly duplicates from all runs and merge them together into one pd.Series
         x = x[ x[ x.shift(1) == x ] == True ].melt(value_name='melted').drop('variable', axis=1)['melted'].dropna()
-        #.reset_index(drop=True)
-        
 
-
-        # df_a_ground_truth_windowized = df_a_ground_truth_windowized[non_consecutive_anomalies]
-        # consecutive_duplicates_indices = s[s==True].index.values
-        # s = (x[ x.shift(1) == x ] == True).iloc[:,0]
-        # consecutive_duplicates_indices = s[s==True].index.values
-
-        all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()['melted']#.values.reshape(-1).tolist()
+        all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()['melted']
+        # consecutive_index_groups are used to avoid treating a single anomalous program counter as multiple anomalies
+        # just because of the window/sequence size being larger than 1 
         consecutive_index_groups = __class__.get_consecutive_index_groups(x, index_list=all_ground_truth.index.tolist())
         for group in consecutive_index_groups:
             # pi = preserved index (of all_detection_results)
@@ -88,17 +76,50 @@ class Detection_Model:
             all_detection_results[group[0]:group[-1]+1] = [False] * len(group)
             all_ground_truth.iloc[group[0]:group[-1]+1] = False
             
-
-
-        # all_detection_results[0] = True # TODO: DELETE (it allowed verifying correctness of evaluation metrics)
-
+        # all_detection_results[1] = True # TODO: DELETE (it allowed verifying correctness of evaluation metrics)
         all_ground_truth = all_ground_truth.values.reshape(-1).tolist()
-
         precision, recall, fscore, support = precision_recall_fscore_support(all_ground_truth, all_detection_results)
+                # all_ground_truth.values.reshape(-1).tolis(), 
+                # all_detection_results
+                # )
 
-        # what percent of anomalies will get detected
-        anomaly_recall = recall[1]
-        # what percent of normal program behaviour will be classified as anomalous
-        inverse_normal_recall = 1 - recall[0]
+        # anomaly_recall and false_positives_ratio are sufficient for evaluation of the anomaly
+        # detection system in our case. However, it may be good idea to output the total vs detected
+        # anomalies, and total non-anomalies vs false positives (just for the sake of verifying 
+        # that evaluation metrics are calculated appropriately, it also gives more insight to us)
+        tn, fp, fn, tp = confusion_matrix(all_ground_truth, all_detection_results).ravel()
 
-        return anomaly_recall, inverse_normal_recall
+        evaluation_metrics = {
+            ####################################################
+            # 2 MAIN evaluation metrics
+
+            # what percent of anomalies will get detected
+            'anomaly_recall' : recall[1],
+            # what percent of normal program behaviour will be classified as anomalous
+            'false_positives_ratio' : 1 - recall[0],
+
+            #####################################################
+            # Some additional metrics for verification purposes
+            'anomaly_count' : fn + tp,
+            'detected_anomaly_count' : tp,
+            'non_anomaly_count' : tn + fp,
+            'false_positives' : fp
+                }
+        return evaluation_metrics
+
+    def format_evaluation_metrics(self, em):
+        ''' em = evaluation metrics dict.
+            This function converts a dict returned from "evaluate_all" to a meaningful string.
+            Which then can be printed/logged. '''
+        anomaly_recall = em['anomaly_recall']
+        false_positives_ratio = em['false_positives_ratio']
+        anomaly_count = em['anomaly_count']
+        detected_anomaly_count = em['detected_anomaly_count']
+        non_anomaly_count = em['non_anomaly_count']
+        false_positives = em['false_positives']
+        return f'anomaly_recall={anomaly_recall:.2f} ({detected_anomaly_count}/{anomaly_count}) false_positives_ratio={false_positives_ratio} ({false_positives}/{non_anomaly_count})'
+
+        
+
+
+

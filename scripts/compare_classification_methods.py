@@ -120,6 +120,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import re
 import numpy as np
 import pandas as pd
+import warnings
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import sys
@@ -275,12 +277,12 @@ if __name__ == '__main__':
                     )
 
             # anomaly_recall = what percent of anomalies will get detected
-            # inverse_normal_recall = what percent of normal program behaviour 
+            # false_positives_ratio = what percent of normal program behaviour 
             #                         will be classified as anomalous, which is 
             #                         referred to as "false positives" in other
             #                         papers (about anomaly detection)
-            anomaly_recall, inverse_normal_recall = ut.evaluate_all(results_ut, df_a_ground_truth_windowized)
-            logging.info(f'anomaly_recall={anomaly_recall:.2f} inverse_normal_recall={inverse_normal_recall}')
+            em = ut.evaluate_all(results_ut, df_a_ground_truth_windowized)
+            logging.info( ut.format_evaluation_metrics(em) )
 
     if conf['lstm_autoencoder'].getboolean('active'):
         # LSTM autoencoder
@@ -299,8 +301,8 @@ if __name__ == '__main__':
                     df_a_ground_truth,
                     window_size 
                     )
-            anomaly_recall, inverse_normal_recall = la.evaluate_all(results_lstm, df_a_ground_truth_windowized)
-            logging.info(f'anomaly_recall={anomaly_recall:.2f} inverse_normal_recall={inverse_normal_recall}')
+            em = la.evaluate_all(results_lstm, df_a_ground_truth_windowized)
+            logging.info( la.format_evaluation_metrics(em) )
             # logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
             # logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')
 

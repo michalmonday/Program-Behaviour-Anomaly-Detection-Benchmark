@@ -65,7 +65,8 @@ def merge_pc_df_columns(df):
     ''' Creates df with "all_pc" column that contains program counters from 
         multiple files (columns), separated by the "separator_value" '''
     # add separator_value row to each column (to avoid recognizing the last PC of 1 run as first PC of 2nd run)
-    df = df.append(pd.Series(), ignore_index=True)
+    # df = df.append(pd.Series(), ignore_index=True)
+    df = pd.concat([df, pd.Series(dtype=df.values.dtype)], axis=0)
     df.iloc[-1] = separator_value
     # stack all columns on top of each other
     df = df.melt(value_name='all_pc').drop('variable', axis=1)
