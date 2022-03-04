@@ -129,7 +129,7 @@ import json
 
 import utils
 from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files, plot_vspans, plot_vspans_ranges, print_config
-from utils import Artificial_Anomalies
+from artificial_anomalies import Artificial_Anomalies
 from lstm_autoencoder import lstm_autoencoder
 from lstm_autoencoder.lstm_autoencoder import LSTM_Autoencoder
 from unique_transitions.unique_transitions import Unique_Transitions
