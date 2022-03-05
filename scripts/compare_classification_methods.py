@@ -224,23 +224,25 @@ if __name__ == '__main__':
         # So with 5 methods and 5 normal pc files there would be 25 testing examples.
 
         # Without going into detail, min_offset must be larger than 0
-        min_offset = conf['data'].getint('artificial_anomalies_min_offset')
-        max_offset = conf['data'].getint('artificial_anomalies_max_offset')
-        offset_count = conf['data'].getint('artificial_anomalies_offsets_count')
-        offsets = np.random.randint(min_offset, max_offset, offset_count)
+        # min_offset = conf['data'].getint('artificial_anomalies_min_offset')
+        # max_offset = conf['data'].getint('artificial_anomalies_max_offset')
+        # offset_count = conf['data'].getint('artificial_anomalies_offsets_count')
+        # offsets = np.random.randint(min_offset, max_offset, offset_count)
+
         # import pdb; pdb.set_trace()
-        for method in all_anomaly_methods:
+        offsets_count = 100
+        for i, method in enumerate(all_anomaly_methods):
 
             # for each normal/baseline append column with introduced anomalies into into "df_a"
-            for i, column_name in enumerate(df_n):
-                for offset in offsets:
+            for j, column_name in enumerate(df_n):
+                for k in range(offsets_count):
                     # introduce anomalies
-                    col_a, ar, pav, col_a_ground_truth = method(df_n[column_name].copy(), offset=offset)
+                    col_a, ar, pav, col_a_ground_truth = method(df_n[column_name].copy())
                     # keep record of anomalies and previous values (for plotting later)
                     anomalies_ranges.append(ar)
                     pre_anomaly_values.append(pav)
                     # rename column
-                    new_column_name = column_name.replace('normal', f'{method.__name__}_offset_{offset}', 1)
+                    new_column_name = column_name.replace('normal', f'{method.__name__}_({i},{j},{k})', 1)
                     df_a[new_column_name] = col_a
                     df_a_ground_truth[new_column_name] = col_a_ground_truth
 
