@@ -126,6 +126,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import sys
 import json
+from copy import deepcopy
 
 import utils
 from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files, plot_vspans, plot_vspans_ranges, print_config
@@ -133,6 +134,7 @@ from artificial_anomalies import Artificial_Anomalies
 from lstm_autoencoder import lstm_autoencoder
 from lstm_autoencoder.lstm_autoencoder import LSTM_Autoencoder
 from unique_transitions.unique_transitions import Unique_Transitions
+from detection_model import Detection_Model
 
 import logging
 logging.basicConfig(format='%(message)s', level=logging.INFO)
@@ -146,7 +148,6 @@ print_config(conf)
 
 def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_values=[]):
     # Plot training (normal pc) and testing (abnormal/compromised pc) data
-    # import pdb; pdb.set_trace()
 
     ax = plot_pc_timeline(df_n, function_ranges)
     ax.set_title('TRAIN DATA', fontsize=20)
@@ -164,7 +165,6 @@ def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_v
     fig.text(0.04, 0.5, 'Program counter (address)', va='center', rotation='vertical')
 
     for i, col_name in enumerate(df_a):
-        # import pdb; pdb.set_trace()
         # ax = axs[i // subplot_columns][i % subplot_columns]
         ax = axs[i]
         plot_pc_timeline(df_a[col_name], function_ranges, ax=ax, title=col_name, xlabel='', ylabel='')
@@ -176,6 +176,7 @@ def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_v
                 vals.plot(ax=ax, color='purple', marker='h', markersize=2, linewidth=0.7, linestyle='dashed')
                 # ax.fill_between(vals.index.values, vals.values, df_a.loc[vals.index].values.reshape(-1), color='r', alpha=0.15)
                 ax.fill_between(vals.index.values, vals.values, df_a.loc[vals.index][col_name].values.reshape(-1), color='r', alpha=0.15)
+
 
 if __name__ == '__main__':
 
@@ -229,8 +230,7 @@ if __name__ == '__main__':
         # offset_count = conf['data'].getint('artificial_anomalies_offsets_count')
         # offsets = np.random.randint(min_offset, max_offset, offset_count)
 
-        # import pdb; pdb.set_trace()
-        offsets_count = 100
+        offsets_count = conf['data'].getint('artificial_anomalies_offsets_count')
         for i, method in enumerate(all_anomaly_methods):
 
             # for each normal/baseline append column with introduced anomalies into into "df_a"
@@ -261,6 +261,7 @@ if __name__ == '__main__':
                 )
 
 
+    df_results = pd.DataFrame(columns=Detection_Model.evaluation_metrics)
 
     if conf['unique_transitions'].getboolean('active'):
         # Unique transitions
@@ -286,6 +287,9 @@ if __name__ == '__main__':
             em = ut.evaluate_all(results_ut, df_a_ground_truth_windowized)
             logging.info( ut.format_evaluation_metrics(em) )
 
+            method_name = f'unique_transitions (seq_size={seq_size})'
+            df_results.loc[method_name] = em
+
     if conf['lstm_autoencoder'].getboolean('active'):
         # LSTM autoencoder
         # window_size = conf['lstm_autoencoder'].getint('window_size')
@@ -307,9 +311,15 @@ if __name__ == '__main__':
             logging.info( la.format_evaluation_metrics(em) )
             # logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
             # logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')
+            method_name = f'lstm autoencoder (window_size={window_size})'
+            df_results.loc[method_name] = em
 
+
+    axs = df_results[['anomaly_recall', 'false_positives_ratio']].plot.bar(rot=15, subplots=True)
+    for ax in axs:
+        for container in ax.containers:
+            ax.bar_label(container)
     plt.show()
-    import pdb; pdb.set_trace()
 
     #for col_a in df_a:
     #    #########################################
@@ -324,7 +334,6 @@ if __name__ == '__main__':
     #    # LSTM autoencoder
     #    is_anomalous, results_df, anomalies_df = la.predict(df_a[col_a])
     #    # axs = la.plot_results(df_a, results_df, anomalies_df, window_size, fig_title = 'LSTM AUTOENCODER RESULTS', function_ranges=function_ranges)
-    #    # import pdb; pdb.set_trace()
 
     #    # plt.show()
     

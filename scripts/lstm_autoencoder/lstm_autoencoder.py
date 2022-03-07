@@ -285,7 +285,8 @@ class LSTM_Autoencoder(Detection_Model):
         #        np.arange(std.min() + std_interval, std.max() + epsilon, std_interval)
         #        ))
         ranges = []
-        for interval in pd.qcut( pd.DataFrame(std)[0], number_of_models, duplicates='drop').unique():
+        intervals = pd.qcut( pd.DataFrame(std)[0], number_of_models, duplicates='drop').unique()
+        for interval in intervals:
             ranges.append((
                 interval.left, 
                 interval.right
@@ -293,6 +294,15 @@ class LSTM_Autoencoder(Detection_Model):
         ranges = sorted(ranges)
         ranges[0] = (0.0, ranges[0][1])
         ranges[-1] = (ranges[-1][0], 99999999.0)
+
+        # fix gaps (no idea why there are occasional gaps...)
+        # (118.905, 119.605), (119.758, 136.005), (136.005, 155.081), (155.081, 165.622),
+        # There's a gap between 119.605 and 119.758, but not in other cases.
+        for i, r in enumerate(ranges):
+            if i == 0:
+                continue
+            ranges[i] = (ranges[i-1][1], ranges[i][1])
+
         return ranges
 
     def train(self, df_n, window_size=20, epochs=10, number_of_models=6):
@@ -389,7 +399,12 @@ class LSTM_Autoencoder(Detection_Model):
         # anomalies = results_df[results_df.anomaly == True]
         # is_anomalous = not anomalies.empty
         # return is_anomalous, results_df, anomalies
-        # import pdb; pdb.set_trace()
+        results_df_not_filled = results_df[ results_df.isna().any(axis=1) ]
+        if not results_df_not_filled.empty:
+            logging.error(f'Some results rows were not filled...')
+            logging.error(results_df_not_filled)
+            import pdb; pdb.set_trace()
+
         return results_df.anomaly.dropna().values.tolist()
 
     def predict_all(self, df_a):

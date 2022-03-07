@@ -5,9 +5,15 @@
 
 import pandas as pd
 import numpy as np
+import logging
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 
 class Detection_Model:
+    evaluation_metrics = [
+        'anomaly_recall', 'false_positives_ratio', 'anomaly_count', 
+        'detected_anomaly_count', 'non_anomaly_count', 'false_positives'
+            ]
+
     @staticmethod
     def get_consecutive_index_groups(series, index_list=[]):
         ''' This function turns pd.Series like this:
@@ -67,10 +73,14 @@ class Detection_Model:
         for group in consecutive_index_groups:
             # pi = preserved index (of all_detection_results)
             pi = group[0] - 1
-            if not all_detection_results[pi]:
-                # set the predicted value at the first index of truly anomalous consecutive window sequence to True
-                # if any of the windows (within sequence) was predicted anomalous
-                all_detection_results[pi] = any(all_detection_results[pi:group[-1]+1])
+            try:
+                if not all_detection_results[pi]:
+                    # set the predicted value at the first index of truly anomalous consecutive window sequence to True
+                    # if any of the windows (within sequence) was predicted anomalous
+                    all_detection_results[pi] = any(all_detection_results[pi:group[-1]+1])
+            except Exception as e:
+                logging.error(e)
+                import pdb; pdb.set_trace()
 
             # set all consecutive anomalous windows to be normal (except the first, preserved index)
             all_detection_results[group[0]:group[-1]+1] = [False] * len(group)
