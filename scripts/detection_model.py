@@ -64,12 +64,15 @@ class Detection_Model:
 
         x = df_a_ground_truth_windowized
         # get indices of all consecutive anomaly duplicates from all runs and merge them together into one pd.Series
-        x = x[ x[ x.shift(1) == x ] == True ].melt(value_name='melted').drop('variable', axis=1)['melted'].dropna()
+        x = x[ x[ x.shift(1) == x ] == True ].melt().drop('variable', axis=1)['value'].dropna()
 
-        all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()['melted']
+        # all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()['melted']
+
+        melted_ground_truth = df_a_ground_truth_windowized.melt().dropna()
+        # all_ground_truth = melted_ground_truth['value'].dropna()
         # consecutive_index_groups are used to avoid treating a single anomalous program counter as multiple anomalies
         # just because of the window/sequence size being larger than 1 
-        consecutive_index_groups = __class__.get_consecutive_index_groups(x, index_list=all_ground_truth.index.tolist())
+        consecutive_index_groups = __class__.get_consecutive_index_groups(x, index_list=melted_ground_truth.index.tolist())
         for group in consecutive_index_groups:
             # pi = preserved index (of all_detection_results)
             pi = group[0] - 1
@@ -84,10 +87,14 @@ class Detection_Model:
 
             # set all consecutive anomalous windows to be normal (except the first, preserved index)
             all_detection_results[group[0]:group[-1]+1] = [False] * len(group)
-            all_ground_truth.iloc[group[0]:group[-1]+1] = False
+
+            # ugly because of mixing positional and label based indexing (which requires index slicing since
+            # depreciation of "ix" method)
+            melted_ground_truth.loc[ melted_ground_truth.index[ group[0]:group[-1]+1 ]  , 'value'] = False
             
         # all_detection_results[1] = True # TODO: DELETE (it allowed verifying correctness of evaluation metrics)
-        all_ground_truth = all_ground_truth.values.reshape(-1).tolist()
+        all_ground_truth = melted_ground_truth['value'].values.reshape(-1).tolist()
+        # import pdb; pdb.set_trace()
         precision, recall, fscore, support = precision_recall_fscore_support(all_ground_truth, all_detection_results)
                 # all_ground_truth.values.reshape(-1).tolis(), 
                 # all_detection_results

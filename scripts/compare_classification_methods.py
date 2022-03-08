@@ -45,6 +45,14 @@ parser.add_argument(
         help='Plots training and testing data'
         )
 
+parser.add_argument(
+        '--quick-test',
+        required=False,
+        action='store_true',
+        help='Overrides sequence/window sizes for quick testing.'
+        )
+
+
 # parser.add_argument(
 #         '--relative-pc',
 #         required=False,
@@ -148,13 +156,8 @@ print_config(conf)
 
 def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_values=[]):
     # Plot training (normal pc) and testing (abnormal/compromised pc) data
-
     ax = plot_pc_timeline(df_n, function_ranges)
     ax.set_title('TRAIN DATA', fontsize=20)
-
-    # subplot_columns = 3
-    # subplot_rows = df_a.shape[1] // subplot_columns
-    # fig, axs = plt.subplots(subplot_rows, subplot_columns, sharex=True)#, sharey=True)
     fig, axs = plt.subplots(df_a.shape[1], sharex=True)#, sharey=True)
     # fig.subplots_adjust(hspace=0.43, top=0.835)
     fig.subplots_adjust(hspace=1.4, top=0.835)
@@ -165,11 +168,9 @@ def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_v
     fig.text(0.04, 0.5, 'Program counter (address)', va='center', rotation='vertical')
 
     for i, col_name in enumerate(df_a):
-        # ax = axs[i // subplot_columns][i % subplot_columns]
         ax = axs[i]
         plot_pc_timeline(df_a[col_name], function_ranges, ax=ax, title=col_name, xlabel='', ylabel='')
         # Plot artificial anomalies
-        # if conf['data'].getboolean('introduce_artificial_anomalies'):
         if not args.abnormal_pc:
             plot_vspans_ranges(ax, anomalies_ranges[i], color='blue', alpha=0.05)
             for vals in pre_anomaly_values[i]:
@@ -179,6 +180,15 @@ def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_v
 
 
 if __name__ == '__main__':
+
+    if args.quick_test:
+        logging.info('\nOVERRIDING CONFIG WITH VALUES FOR QUICK TESTING (because --quick-test was supplied)')
+        logging.info('Overriden values are: sequence/window sizes, forest size, epochs.\n')
+        conf['unique_transitions']['sequence_sizes'] = '2'
+        conf['lstm_autoencoder']['window_sizes'] = '3'
+        conf['lstm_autoencoder']['forest_size'] = '3'
+        conf['lstm_autoencoder']['epochs'] = '5'
+        conf['data']['artificial_anomalies_offsets_count'] = '5'
 
     #########################################
     # Load and plot data
@@ -224,12 +234,6 @@ if __name__ == '__main__':
         # Example above shows only 3 methods and 2 files, but the principle applies for any number.
         # So with 5 methods and 5 normal pc files there would be 25 testing examples.
 
-        # Without going into detail, min_offset must be larger than 0
-        # min_offset = conf['data'].getint('artificial_anomalies_min_offset')
-        # max_offset = conf['data'].getint('artificial_anomalies_max_offset')
-        # offset_count = conf['data'].getint('artificial_anomalies_offsets_count')
-        # offsets = np.random.randint(min_offset, max_offset, offset_count)
-
         offsets_count = conf['data'].getint('artificial_anomalies_offsets_count')
         for i, method in enumerate(all_anomaly_methods):
 
@@ -249,8 +253,6 @@ if __name__ == '__main__':
     logging.info(f'Number of normal pc files: {df_n.shape[1]}')
     logging.info(f'Number of abnormal pc files: {df_a.shape[1]}')
 
-    # if conf['data'].getboolean('introduce_artificial_anomalies'):
-
     if args.plot_data:
         plot_data(
                 df_n,
@@ -260,12 +262,10 @@ if __name__ == '__main__':
                 pre_anomaly_values=pre_anomaly_values
                 )
 
-
     df_results = pd.DataFrame(columns=Detection_Model.evaluation_metrics)
 
     if conf['unique_transitions'].getboolean('active'):
         # Unique transitions
-        # seq_size = conf['unique_transitions'].getint('sequence_size')
         sequence_sizes = [int(seq_size) for seq_size in conf['unique_transitions'].get('sequence_sizes').strip().split(',')]
         for seq_size in sequence_sizes:
             ut = Unique_Transitions()
@@ -318,6 +318,7 @@ if __name__ == '__main__':
     axs = df_results[['anomaly_recall', 'false_positives_ratio']].plot.bar(rot=15, subplots=True)
     for ax in axs:
         for container in ax.containers:
+            # set numerical label on top of bar/rectangle
             ax.bar_label(container)
     plt.show()
 
