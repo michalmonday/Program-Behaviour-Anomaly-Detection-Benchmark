@@ -2,6 +2,16 @@ import pandas as pd
 import numpy as np
 import logging
 import random
+from math import ceil, floor, sqrt
+import matplotlib.pyplot as plt
+
+TITLE_SIZE = 20
+
+def hexify_y_axis(ax):
+    ax.get_yaxis().set_major_formatter(lambda y,pos: hex(int(y)))
+
+def hexify_x_axis(ax):
+    ax.get_xaxis().set_major_formatter(lambda x,pos: hex(int(x)))
 
 def read_pc_values(f_name, relative_pc=False, ignore_non_jumps=False, load_address=0):
     with open(f_name) as f:
@@ -90,7 +100,7 @@ def pc_df_to_sliding_windows(df, window_size, unique=False):
 
 def plot_pc_histogram(df, function_ranges={}, bins=100, function_line_width=0.7, title='Histogram of program counters (frequency distribution)'):
     ax = df.plot.hist(bins=bins, alpha=1/df.shape[1], title=title)
-    ax.get_xaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
+    hexify_x_axis(ax)
     ax.get_yaxis().set_major_formatter(lambda x,pos: f'{int(x)}')
     x_start, x_end = ax.get_xticks()[0], ax.get_xticks()[-1]
     y_top = ax.transAxes.to_values()[3]
@@ -129,7 +139,7 @@ def plot_pc_timeline(df, function_ranges={}, function_line_width=0.7, ax=None, t
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     y_start, y_end = ax.get_yticks()[0], ax.get_yticks()[-1]
-    ax.get_yaxis().set_major_formatter(lambda x,pos: f'0x{int(x):X}')
+    hexify_y_axis(ax)
     i = 0
     for func_name, (start, end) in function_ranges.items():
         if func_name == 'total': continue
@@ -155,36 +165,36 @@ def plot_vspans_ranges(ax, ranges, color='red', alpha=0.15):
     for start, end in ranges:
         ax.axvspan(start, end, color=color, alpha=alpha)
 
-def introduce_artificial_anomalies(df):
-    ''' Currently (10/02/22) only single anomalous file is supported.
-        It returns modified dataframe and ranges of indices where
-        anomalies were introduced (so it can be marked on the plot 
-        later with "plot_vspans" for example.  '''
-    col = df.iloc[:,0]
+# def introduce_artificial_anomalies(df):
+#     ''' Currently (10/02/22) only single anomalous file is supported.
+#         It returns modified dataframe and ranges of indices where
+#         anomalies were introduced (so it can be marked on the plot 
+#         later with "plot_vspans" for example.  '''
+#     col = df.iloc[:,0]
 
-    anomalies_ranges = []
-    original_values = []
+#     anomalies_ranges = []
+#     original_values = []
 
-    # EASY TO DETECT
-    #     set values at index 10,11,12,13,14 to random values
-    how_many = 5
-    original_values.append(col[10-1:10+how_many+1].copy())
-    col[10:10+how_many] = np.random.randint(col.min(), col.max(), how_many)
-    anomalies_ranges.append((10-1,10+how_many))
+#     # EASY TO DETECT
+#     #     set values at index 10,11,12,13,14 to random values
+#     how_many = 5
+#     original_values.append(col[10-1:10+how_many+1].copy())
+#     col[10:10+how_many] = np.random.randint(col.min(), col.max(), how_many)
+#     anomalies_ranges.append((10-1,10+how_many))
 
-    # HARDER TO DETECT
-    #     slightly modify values at index 60,61,62,63,64 
-    #     (by adding or subtracting multiply of 8)
-    original_values.append(col[60-1:60+how_many+1].copy())
-    col[60:60+how_many] += np.random.randint(-3, 3, how_many) * 8 
-    anomalies_ranges.append((60-1,60+how_many))
+#     # HARDER TO DETECT
+#     #     slightly modify values at index 60,61,62,63,64 
+#     #     (by adding or subtracting multiply of 8)
+#     original_values.append(col[60-1:60+how_many+1].copy())
+#     col[60:60+how_many] += np.random.randint(-3, 3, how_many) * 8 
+#     anomalies_ranges.append((60-1,60+how_many))
 
-    # HARD TO DETECT
-    #     modify a single value at index 110 by adding 8 to it
-    original_values.append(col[110-1:111+1].copy())
-    col[110] += 8
-    anomalies_ranges.append((110-1, 110+1))
-    return df, anomalies_ranges, original_values
+#     # HARD TO DETECT
+#     #     modify a single value at index 110 by adding 8 to it
+#     original_values.append(col[110-1:111+1].copy())
+#     col[110] += 8
+#     anomalies_ranges.append((110-1, 110+1))
+#     return df, anomalies_ranges, original_values
 
 def print_config(c):
     print_header('CONFIG')
@@ -207,6 +217,61 @@ def windowize_ground_truth_labels(ground_truth_labels, window_size):
     gtl = ground_truth_labels.rolling(window_size).apply(any)
     gtl[gtl.notna()] = gtl.astype(bool)
     return gtl
+
+def plot_undetected_regions(not_detected, df_a, pre_anomaly_values, anomalies_ranges, title=''):
+    ''' not_detected is a dataframe containing file name and index within the file 
+        of undetected anomalies '''
+
+    # TODO: keep in mind to use pre_anomaly_values and anomalies_ranges
+    cols = floor( sqrt( not_detected.shape[0] ) )
+    surrounding_pc = 10
+    fig, axs = plt.subplots(ceil(not_detected.shape[0]/cols), cols)
+    if title:
+        fig.suptitle(title, fontsize=TITLE_SIZE)
+    fig.subplots_adjust(wspace=0.3, hspace=0.6)
+    for ax in axs.flatten():
+        ax.set_visible(False)
+    for i, (_, row) in enumerate(not_detected.iterrows()):
+        f_name = row['variable']
+        index = row['index']
+        # get f_name column index in df_a and use it to get the right pre_anomaly_values 
+        # and anomalies_ranges
+        col_index = df_a.columns.get_loc(f_name)
+        ar = anomalies_ranges[col_index]
+        pav = pre_anomaly_values[col_index]
+        first_anomaly_index = ar[0][0]
+        last_anomaly_index = ar[-1][-1]
+
+        subplot_x = i % cols
+        subplot_y = i // cols
+
+        range_ = range(
+                max(0, first_anomaly_index - surrounding_pc), 
+                min(df_a.shape[0]-1, last_anomaly_index + surrounding_pc + 1)
+                )
+
+        # range_ = range(
+        #         max(0, index - surrounding_pc), 
+        #         min(df_a.shape[0]-1, last_anomaly_index + surrounding_pc + 1)
+        #         )
+        ax = axs[subplot_y][subplot_x]
+        ax.set_visible(True)
+        ax.set_title(f_name, fontsize=6)
+        ax.xaxis.set_tick_params(labelsize=6)
+        ax.yaxis.set_tick_params(labelsize=6)
+        hexify_y_axis(ax)
+        df_a.loc[range_, f_name].plot(ax=ax)
+
+
+        plot_vspans_ranges(ax, ar, color='blue')
+        # pav.plot()
+        for vals in pav:
+            vals.plot(ax=ax, color='purple', marker='h', markersize=2, linewidth=0.7, linestyle='dashed')
+            # ax.fill_between(vals.index.values, vals.values, df_a.loc[vals.index].values.reshape(-1), color='r', alpha=0.15)
+            ax.fill_between(vals.index.values, vals.values, df_a.loc[vals.index,f_name].values.reshape(-1), color='r', alpha=0.15)
+    return fig, axs
+    
+
 
 
 

@@ -87,18 +87,16 @@ class Unique_Transitions(Detection_Model):
         logging.info(f'Longest train program size: {df_n.shape[0]} instructions')
         logging.info(f'Number of unique train sequences (with size of {n}): {self.normal_ut.shape[0]}')
 
-    def predict(self, df_a):
+    def predict(self, col_a):
         # gets abnormal_ut entries that are not present in normal_ut
         # (it ignores df index so that's why it's ugly)
         # it's from: https://stackoverflow.com/a/50645672/4620679
         # import pdb; pdb.set_trace()
 
-        col_a = pd.DataFrame(df_a)
-
         abnormal_ut = utils.pc_df_to_sliding_windows(col_a, window_size=self.train_n, unique=True)
         # detected_ut_orig = abnormal_ut[ ~abnormal_ut[ ~abnormal_ut.stack().isin(self.normal_ut.stack().values).unstack()].isna().all(axis=1) ].dropna()
         detected_ut = abnormal_ut.merge(self.normal_ut, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
-       
+
         # set is used for fast lookup
         detected_ut_set = set()
 
@@ -123,7 +121,7 @@ class Unique_Transitions(Detection_Model):
         return results
 
     def predict_all(self, df_a):
-        return [self.predict(df_a[col_a]) for col_a in df_a]
+        return [self.predict(df_a[[col_a]]) for col_a in df_a]
 
 
 #def detect(df_n, df_a, n=2):

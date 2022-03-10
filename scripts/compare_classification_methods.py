@@ -157,11 +157,11 @@ print_config(conf)
 def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_values=[]):
     # Plot training (normal pc) and testing (abnormal/compromised pc) data
     ax = plot_pc_timeline(df_n, function_ranges)
-    ax.set_title('TRAIN DATA', fontsize=20)
+    ax.set_title('TRAIN DATA', fontsize=utils.FONT_SIZE)
     fig, axs = plt.subplots(df_a.shape[1], sharex=True)#, sharey=True)
     # fig.subplots_adjust(hspace=0.43, top=0.835)
     fig.subplots_adjust(hspace=1.4, top=0.835)
-    fig.suptitle('TEST DATA', fontsize=20)
+    fig.suptitle('TEST DATA', fontsize=utils.FONT_SIZE)
     # fig.supxlabel('Instruction index')
     # fig.supylabel('Program counter (address)')
     fig.text(0.5, 0.04, 'Instruction index', ha='center')
@@ -284,11 +284,14 @@ if __name__ == '__main__':
             #                         will be classified as anomalous, which is 
             #                         referred to as "false positives" in other
             #                         papers (about anomaly detection)
-            em = ut.evaluate_all(results_ut, df_a_ground_truth_windowized)
+            not_detected, em = ut.evaluate_all(results_ut, df_a_ground_truth_windowized)
             logging.info( ut.format_evaluation_metrics(em) )
 
             method_name = f'unique_transitions (seq_size={seq_size})'
             df_results.loc[method_name] = em
+
+            if not not_detected.empty:
+                fig, axs = utils.plot_undetected_regions(not_detected, df_a, pre_anomaly_values, anomalies_ranges, title=f'Undetected anomalies - {method_name}')
 
     if conf['lstm_autoencoder'].getboolean('active'):
         # LSTM autoencoder
@@ -307,12 +310,15 @@ if __name__ == '__main__':
                     df_a_ground_truth,
                     window_size 
                     )
-            em = la.evaluate_all(results_lstm, df_a_ground_truth_windowized)
+            not_detected, em = la.evaluate_all(results_lstm, df_a_ground_truth_windowized)
             logging.info( la.format_evaluation_metrics(em) )
             # logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
             # logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')
             method_name = f'lstm autoencoder (window_size={window_size})'
             df_results.loc[method_name] = em
+
+            if not not_detected.empty:
+                fig, axs = utils.plot_undetected_regions(not_detected, df_a, pre_anomaly_values, anomalies_ranges, title=f'Undetected anomalies - {method_name}')
 
 
     axs = df_results[['anomaly_recall', 'false_positives_ratio']].plot.bar(rot=15, subplots=True)

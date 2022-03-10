@@ -127,7 +127,7 @@ class Detection_Model:
         if not not_detected_anomalies.empty:
             logging.info('Not detected anomalies:')
             logging.info(not_detected_anomalies)
-        return evaluation_metrics
+        return not_detected_anomalies, evaluation_metrics
 
     def format_evaluation_metrics(self, em):
         ''' em = evaluation metrics dict.
