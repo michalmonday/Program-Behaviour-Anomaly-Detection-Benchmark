@@ -96,7 +96,8 @@ class Unique_Transitions(Detection_Model):
         col_a = pd.DataFrame(df_a)
 
         abnormal_ut = utils.pc_df_to_sliding_windows(col_a, window_size=self.train_n, unique=True)
-        detected_ut = abnormal_ut[ ~abnormal_ut[ ~abnormal_ut.stack().isin(self.normal_ut.stack().values).unstack()].isna().all(axis=1) ].dropna()
+        # detected_ut_orig = abnormal_ut[ ~abnormal_ut[ ~abnormal_ut.stack().isin(self.normal_ut.stack().values).unstack()].isna().all(axis=1) ].dropna()
+        detected_ut = abnormal_ut.merge(self.normal_ut, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
        
         # set is used for fast lookup
         detected_ut_set = set()

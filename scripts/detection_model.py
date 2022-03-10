@@ -68,7 +68,7 @@ class Detection_Model:
 
         # all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()['melted']
 
-        melted_ground_truth = df_a_ground_truth_windowized.melt().dropna()
+        melted_ground_truth = pd.melt(df_a_ground_truth_windowized.reset_index(), id_vars=['index']).dropna()
         # all_ground_truth = melted_ground_truth['value'].dropna()
         # consecutive_index_groups are used to avoid treating a single anomalous program counter as multiple anomalies
         # just because of the window/sequence size being larger than 1 
@@ -122,6 +122,11 @@ class Detection_Model:
             'non_anomaly_count' : tn + fp,
             'false_positives' : fp
                 }
+        mgt = melted_ground_truth['value'].reset_index(drop=True)
+        not_detected_anomalies = melted_ground_truth.iloc[ mgt[ (mgt == True) & (pd.Series(all_detection_results) == False) ].index ]
+        if not not_detected_anomalies.empty:
+            logging.info('Not detected anomalies:')
+            logging.info(not_detected_anomalies)
         return evaluation_metrics
 
     def format_evaluation_metrics(self, em):
