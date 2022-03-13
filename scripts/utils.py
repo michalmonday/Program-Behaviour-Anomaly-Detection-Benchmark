@@ -4,6 +4,8 @@ import logging
 import random
 from math import ceil, floor, sqrt
 import matplotlib.pyplot as plt
+import re
+import os
 
 TITLE_SIZE = 20
 
@@ -272,6 +274,18 @@ def plot_undetected_regions(not_detected, df_a, pre_anomaly_values, anomalies_ra
     return fig, axs
     
 
+def sanitize_fname(fname):
+    return re.sub('[^0-9a-zA-Z -]', '_', fname)
 
+def save_figure(fig, fname, images_dir):
+    fname = sanitize_fname(fname)
+    fname = os.path.join(images_dir, fname)
+    # fig.canvas.manager.window.showMaximized()
+    # fig.canvas.manager.window.state('zoomed')
+    # fig.canvas.manager.frame.Maximize(True)
+    fig.savefig(fname)
+
+if __name__ == '__main__':
+    print( sanitize_fname('abc.,(-):123') )
 
 

@@ -5,6 +5,8 @@
 ./% --normal-pc ../log_files/stack-mission_riscv64_normal.pc --abnormal-pc ../log_files/stack-mission_riscv64_compromised.pc --function-ranges ../log_files/stack-missi on_riscv64_llvm_objdump_ranges.json
 
 ./% -n ../log_files/*normal*pc -a ../log_files/*compr*pc -fr ../log_files/*json --window-size 40 --epochs 30 --abnormal-load-address 4 --relative-pc --transition-sequence-size 3 --ignore-non-jumps --autoencoder-forest-size 30
+
+python3.7 compare_classification_methods.py  -n ../log_files/*normal*pc -fr ../log_files/*json --quick-test --plot-data
 '''
 
 
@@ -157,11 +159,11 @@ print_config(conf)
 def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_values=[]):
     # Plot training (normal pc) and testing (abnormal/compromised pc) data
     ax = plot_pc_timeline(df_n, function_ranges)
-    ax.set_title('TRAIN DATA', fontsize=utils.FONT_SIZE)
+    ax.set_title('TRAIN DATA', fontsize=utils.TITLE_SIZE)
     fig, axs = plt.subplots(df_a.shape[1], sharex=True)#, sharey=True)
     # fig.subplots_adjust(hspace=0.43, top=0.835)
     fig.subplots_adjust(hspace=1.4, top=0.835)
-    fig.suptitle('TEST DATA', fontsize=utils.FONT_SIZE)
+    fig.suptitle('TEST DATA', fontsize=utils.TITLE_SIZE)
     # fig.supxlabel('Instruction index')
     # fig.supylabel('Program counter (address)')
     fig.text(0.5, 0.04, 'Instruction index', ha='center')
@@ -180,6 +182,8 @@ def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_v
 
 
 if __name__ == '__main__':
+
+    images_dir = conf['output'].get('images_dir').strip()
 
     if args.quick_test:
         logging.info('\nOVERRIDING CONFIG WITH VALUES FOR QUICK TESTING (because --quick-test was supplied)')
@@ -292,6 +296,8 @@ if __name__ == '__main__':
 
             if not not_detected.empty:
                 fig, axs = utils.plot_undetected_regions(not_detected, df_a, pre_anomaly_values, anomalies_ranges, title=f'Undetected anomalies - {method_name}')
+                utils.save_figure(fig, method_name, images_dir)
+
 
     if conf['lstm_autoencoder'].getboolean('active'):
         # LSTM autoencoder
@@ -319,6 +325,7 @@ if __name__ == '__main__':
 
             if not not_detected.empty:
                 fig, axs = utils.plot_undetected_regions(not_detected, df_a, pre_anomaly_values, anomalies_ranges, title=f'Undetected anomalies - {method_name}')
+                utils.save_figure(fig, method_name, images_dir)
 
 
     axs = df_results[['anomaly_recall', 'false_positives_ratio']].plot.bar(rot=15, subplots=True)
