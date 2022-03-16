@@ -188,7 +188,8 @@ if __name__ == '__main__':
     if args.quick_test:
         logging.info('\nOVERRIDING CONFIG WITH VALUES FOR QUICK TESTING (because --quick-test was supplied)')
         logging.info('Overriden values are: sequence/window sizes, forest size, epochs.\n')
-        conf['unique_transitions']['sequence_sizes'] = '2'
+        # conf['unique_transitions']['sequence_sizes'] = '2'
+        conf['unique_transitions']['sequence_sizes'] = '15'
         conf['lstm_autoencoder']['window_sizes'] = '3'
         conf['lstm_autoencoder']['forest_size'] = '3'
         conf['lstm_autoencoder']['epochs'] = '5'
@@ -262,7 +263,7 @@ if __name__ == '__main__':
             col, first_iteration_ranges, reduced_ranges, col_a_ground_truth = Artificial_Anomalies.reduce_loops(df_n[column_name])
             new_column = pd.Series([np.NaN]*df_n.shape[0])
             new_column[0:col.shape[0]] = col
-            logging.info(f'new_column: {new_column}')
+            # logging.info(f'new_column: {new_column}')
             df_a[new_column_name] = new_column
             df_a_ground_truth[new_column_name] = col_a_ground_truth
             pre_anomaly_values.append([])
