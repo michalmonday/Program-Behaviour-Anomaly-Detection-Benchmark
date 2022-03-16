@@ -223,7 +223,7 @@ if __name__ == '__main__':
         all_anomaly_methods = [
                 Artificial_Anomalies.randomize_section,
                 Artificial_Anomalies.slightly_randomize_section,
-                Artificial_Anomalies.minimal
+                Artificial_Anomalies.minimal,
                 ]
         # Introduce artificial anomalies for all the files, resulting in the following testing examples:
         # - method 1 with file 1
@@ -254,6 +254,21 @@ if __name__ == '__main__':
                     df_a[new_column_name] = col_a
                     df_a_ground_truth[new_column_name] = col_a_ground_truth
 
+        # REDUCE LOOPS
+        # Reducing loops can't be very randomized so it's done after all other 
+        # anomalies are introduced (where program counter values are randomized).
+        for j, column_name in enumerate(df_n):
+            new_column_name = column_name.replace('normal', f'reduced_loops', 1)
+            col, first_iteration_ranges, reduced_ranges, col_a_ground_truth = Artificial_Anomalies.reduce_loops(df_n[column_name])
+            new_column = pd.Series([np.NaN]*df_n.shape[0])
+            new_column[0:col.shape[0]] = col
+            logging.info(f'new_column: {new_column}')
+            df_a[new_column_name] = new_column
+            df_a_ground_truth[new_column_name] = col_a_ground_truth
+            pre_anomaly_values.append([])
+            anomalies_ranges.append(first_iteration_ranges)
+
+
     logging.info(f'Number of normal pc files: {df_n.shape[1]}')
     logging.info(f'Number of abnormal pc files: {df_a.shape[1]}')
 
@@ -265,6 +280,7 @@ if __name__ == '__main__':
                 anomalies_ranges=anomalies_ranges,
                 pre_anomaly_values=pre_anomaly_values
                 )
+        plt.show()
 
     df_results = pd.DataFrame(columns=Detection_Model.evaluation_metrics)
 

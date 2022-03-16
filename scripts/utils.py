@@ -285,6 +285,8 @@ def save_figure(fig, fname, images_dir):
     # fig.canvas.manager.frame.Maximize(True)
     fig.savefig(fname)
 
+
+
 if __name__ == '__main__':
     print( sanitize_fname('abc.,(-):123') )
 

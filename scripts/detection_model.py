@@ -33,8 +33,9 @@ class Detection_Model:
                 [652 653 654] ,
                 [1203 1204 1205 1206]
             ] 
-        '''
 
+        Index list allows to substitute indices.
+        '''
         i_series = pd.Series(series.index.values)
         groups = []
         for k, g in i_series.groupby(i_series.diff().ne(1).cumsum()):
@@ -124,9 +125,9 @@ class Detection_Model:
                 }
         mgt = melted_ground_truth['value'].reset_index(drop=True)
         not_detected_anomalies = melted_ground_truth.iloc[ mgt[ (mgt == True) & (pd.Series(all_detection_results) == False) ].index ]
-        if not not_detected_anomalies.empty:
-            logging.info('Not detected anomalies:')
-            logging.info(not_detected_anomalies)
+        # if not not_detected_anomalies.empty:
+        #     logging.info('Not detected anomalies:')
+        #     logging.info(not_detected_anomalies)
         return not_detected_anomalies, evaluation_metrics
 
     def format_evaluation_metrics(self, em):

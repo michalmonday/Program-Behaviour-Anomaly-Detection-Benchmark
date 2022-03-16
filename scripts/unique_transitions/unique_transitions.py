@@ -93,9 +93,16 @@ class Unique_Transitions(Detection_Model):
         # it's from: https://stackoverflow.com/a/50645672/4620679
         # import pdb; pdb.set_trace()
 
+        # logging.info(col_a)
+        # logging.info(type(col_a))
+
         abnormal_ut = utils.pc_df_to_sliding_windows(col_a, window_size=self.train_n, unique=True)
         # detected_ut_orig = abnormal_ut[ ~abnormal_ut[ ~abnormal_ut.stack().isin(self.normal_ut.stack().values).unstack()].isna().all(axis=1) ].dropna()
-        detected_ut = abnormal_ut.merge(self.normal_ut, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
+        try:
+            detected_ut = abnormal_ut.merge(self.normal_ut, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
+        except Exception as e:
+            logging.error(f'{e}')
+            import pdb; pdb.set_trace()
 
         # set is used for fast lookup
         detected_ut_set = set()
