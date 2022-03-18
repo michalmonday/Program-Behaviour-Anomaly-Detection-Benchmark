@@ -137,6 +137,7 @@ import matplotlib.ticker as ticker
 import sys
 import json
 from copy import deepcopy
+from math import ceil, floor, sqrt
 
 import utils
 from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files, plot_vspans, plot_vspans_ranges, print_config
@@ -158,27 +159,35 @@ print_config(conf)
 
 def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_values=[]):
     # Plot training (normal pc) and testing (abnormal/compromised pc) data
-    ax = plot_pc_timeline(df_n, function_ranges)
-    ax.set_title('TRAIN DATA', fontsize=utils.TITLE_SIZE)
-    fig, axs = plt.subplots(df_a.shape[1], sharex=True)#, sharey=True)
-    # fig.subplots_adjust(hspace=0.43, top=0.835)
-    fig.subplots_adjust(hspace=1.4, top=0.835)
-    fig.suptitle('TEST DATA', fontsize=utils.TITLE_SIZE)
-    # fig.supxlabel('Instruction index')
-    # fig.supylabel('Program counter (address)')
-    fig.text(0.5, 0.04, 'Instruction index', ha='center')
-    fig.text(0.04, 0.5, 'Program counter (address)', va='center', rotation='vertical')
+    cols = floor( sqrt( df_a.shape[1] ) )
+    if not df_n.empty:
+        ax = plot_pc_timeline(df_n, function_ranges)
+        ax.set_title('TRAIN DATA', fontsize=utils.TITLE_SIZE)
 
-    for i, col_name in enumerate(df_a):
-        ax = axs[i]
-        plot_pc_timeline(df_a[col_name], function_ranges, ax=ax, title=col_name, xlabel='', ylabel='')
-        # Plot artificial anomalies
-        if not args.abnormal_pc:
-            plot_vspans_ranges(ax, anomalies_ranges[i], color='blue', alpha=0.05)
-            for vals in pre_anomaly_values[i]:
-                vals.plot(ax=ax, color='purple', marker='h', markersize=2, linewidth=0.7, linestyle='dashed')
-                # ax.fill_between(vals.index.values, vals.values, df_a.loc[vals.index].values.reshape(-1), color='r', alpha=0.15)
-                ax.fill_between(vals.index.values, vals.values, df_a.loc[vals.index][col_name].values.reshape(-1), color='r', alpha=0.15)
+    if not df_a.empty:
+        # fig, axs = plt.subplots(df_a.shape[1], sharex=True)#, sharey=True)
+        fig, axs = plt.subplots(ceil(df_a.shape[1]/cols), cols, sharex=True, squeeze=False)
+        # fig.subplots_adjust(hspace=0.43, top=0.835)
+        fig.subplots_adjust(hspace=1.4, top=0.835)
+        fig.suptitle('TEST DATA', fontsize=utils.TITLE_SIZE)
+        # fig.supxlabel('Instruction index')
+        # fig.supylabel('Program counter (address)')
+        fig.text(0.5, 0.04, 'Instruction index', ha='center')
+        fig.text(0.04, 0.5, 'Program counter (address)', va='center', rotation='vertical')
+
+        for i, col_name in enumerate(df_a):
+            ax = axs[i//cols][i%cols]
+            plot_pc_timeline(df_a[col_name], function_ranges, ax=ax, title=col_name, titlesize=6, xlabel='', ylabel='')
+            # Plot artificial anomalies
+            if not args.abnormal_pc:
+                ar = anomalies_ranges[i] if i < len(anomalies_ranges) else []
+                pav = pre_anomaly_values[i] if i < len(pre_anomaly_values) else []
+                if ar:
+                    plot_vspans_ranges(ax, ar, color='blue', alpha=0.05)
+                for vals in pav:
+                    vals.plot(ax=ax, color='purple', marker='h', markersize=2, linewidth=0.7, linestyle='dashed')
+                    # ax.fill_between(vals.index.values, vals.values, df_a.loc[vals.index].values.reshape(-1), color='r', alpha=0.15)
+                    ax.fill_between(vals.index.values, vals.values, df_a.loc[vals.index][col_name].values.reshape(-1), color='r', alpha=0.15)
 
 
 if __name__ == '__main__':
@@ -258,17 +267,39 @@ if __name__ == '__main__':
         # REDUCE LOOPS
         # Reducing loops can't be very randomized so it's done after all other 
         # anomalies are introduced (where program counter values are randomized).
+        min_iteration_size = conf['data'].getint('artificial_anomalies_reduce_loops_min_iteration_size')
         for j, column_name in enumerate(df_n):
             new_column_name = column_name.replace('normal', f'reduced_loops', 1)
-            col, first_iteration_ranges, reduced_ranges, col_a_ground_truth = Artificial_Anomalies.reduce_loops(df_n[column_name])
+            col, first_iteration_ranges, reduced_ranges, col_a_ground_truth = Artificial_Anomalies.reduce_loops(
+                    df_n[column_name],
+                    min_iteration_size=min_iteration_size
+                    )
             new_column = pd.Series([np.NaN]*df_n.shape[0])
             new_column[0:col.shape[0]] = col
             # logging.info(f'new_column: {new_column}')
+            # pav = pd.Series()
             df_a[new_column_name] = new_column
             df_a_ground_truth[new_column_name] = col_a_ground_truth
-            pre_anomaly_values.append([])
-            anomalies_ranges.append(first_iteration_ranges)
+            pav = []
+            # TODO: append original values based on "col.probably_loc[reduced_range] for reduced_range in reduced_ranges"
+            for r in sorted(reduced_ranges):
+                # pav = pav.combine(col.loc[r[0]:r[1]], max, fill_value=-1)
+                pav.append(df_n[column_name].loc[r[0]:r[1]].copy())
+            # specific_values=[True] will return anomaly ranges only
+            ar = utils.get_same_consecutive_values_ranges(col_a_ground_truth, specific_values=[True])
+            pre_anomaly_values.append(pav)
+            anomalies_ranges.append(ar)
 
+    
+    
+
+    # df_a.iloc[:,-1].dropna().plot()
+    # plt.plot(df_a_ground_truth.iloc[:,-1].dropna().values * df_a.iloc[:,-1].max())
+    # plt.show()
+    plot_data(pd.DataFrame(), df_a.iloc[:,-2:], anomalies_ranges=anomalies_ranges[-2:])
+    plot_data(pd.DataFrame(), df_a.iloc[:,-2:], anomalies_ranges=anomalies_ranges[-2:], pre_anomaly_values=pre_anomaly_values[-2:])
+
+    # import pdb; pdb.set_trace()
 
     logging.info(f'Number of normal pc files: {df_n.shape[1]}')
     logging.info(f'Number of abnormal pc files: {df_a.shape[1]}')
@@ -299,6 +330,7 @@ if __name__ == '__main__':
                     df_a_ground_truth,
                     seq_size # window/sequence size
                     )
+            # df_a_ground_truth_windowized = df_a_ground_truth
 
             # anomaly_recall = what percent of anomalies will get detected
             # false_positives_ratio = what percent of normal program behaviour 

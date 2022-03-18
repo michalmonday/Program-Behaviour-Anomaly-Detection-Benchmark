@@ -112,7 +112,7 @@ class Artificial_Anomalies:
     #                 import pdb; pdb.set_trace()
 
     @staticmethod
-    def reduce_loops(col):
+    def reduce_loops(col, min_iteration_size=2):
         ''' It must return col_ground_truth.
             I have to decide which part to mark as anomalous:
             - only the last index of first loop iteration + next index that follows it
@@ -127,15 +127,22 @@ class Artificial_Anomalies:
         # gt = col.copy() # gt = ground_truth
         # gt[ gt.notnull() ] = False
         gt = pd.Series([np.NaN]*col.shape[0])
-        # import pdb; pdb.set_trace()
-        for size in reversed(range(2, col.shape[0]//2 + 1)):
+        # iteration size is the number of program counter values that are part
+        # of a single iteration of a loop
+        for iteration_size in reversed(range(min_iteration_size, col.shape[0]//2 + 1)):
             # col shape is dynamic as more loops are reduced.
             # (so the condition below improves performance)
-            if size > (col.shape[0] // 2 + 1):
+            if iteration_size > (col.shape[0] // 2 + 1):
                 continue
-            col, reduced_ranges, reduced_rows, first_iteration_ranges = __class__.reduce_loops_single_size(col, size, all_reduced_rows)
+            col, reduced_ranges, reduced_rows, first_iteration_ranges = __class__.reduce_loops_single_size(col, iteration_size, all_reduced_rows)
+            # print(f'Size: {iteration_size}\ncol:\n{col}\nreduced_ranges:\n{reduced_ranges}\n')
             all_reduced_rows |= reduced_rows 
-            # print(f'Size: {size}\ncol:\n{col}\nreduced_ranges:\n{reduced_ranges}\n')
+            # for i, r in enumerate(reduced_ranges):
+            #     reduced_ranges[i] = (r[0] + len(all_reduced_rows),r[1] + len(all_reduced_rows))
+
+            # for i, fir in enumerate(first_iteration_ranges):
+            #     first_iteration_ranges[i] = (fir[0] + len(all_reduced_rows),fir[1] + len(all_reduced_rows))
+
             all_reduced_ranges.extend(reduced_ranges)
             all_first_iteration_ranges.extend(first_iteration_ranges)
             for start, end in first_iteration_ranges:
@@ -152,7 +159,7 @@ class Artificial_Anomalies:
                     print(f'{not_null_labels.shape[0]} not null labels will be dropped')
                     print(not_null_labels)
                 gt.drop(gt[start:end].index, inplace=True)
-                # logging.info(f'len(reduced_rows)={len(reduced_rows):<3} len(all_reduced_rows)={len(all_reduced_rows):<3} start={start:<3} end={end:<3} size={size:<3} col.shape[0]={col.shape[0]} orig_size_not_null={orig_size_not_null} discrepancy={orig_size_not_null - col[col.notnull()].shape[0] - len(all_reduced_rows)}')
+                # logging.info(f'len(reduced_rows)={len(reduced_rows):<3} len(all_reduced_rows)={len(all_reduced_rows):<3} start={start:<3} end={end:<3} iteration_size={iteration_size:<3} col.shape[0]={col.shape[0]} orig_size_not_null={orig_size_not_null} discrepancy={orig_size_not_null - col[col.notnull()].shape[0] - len(all_reduced_rows)}')
             
         col_size = col[col.notnull()].shape[0] 
         # gt.iloc[:col_size][gt.isnull()] = False
