@@ -326,7 +326,7 @@ if __name__ == '__main__':
             # results_ua is a list of boolean lists for each file
             # where True=anomaly, False=normal
             results_ut = ut.predict_all(df_a)
-            df_a_ground_truth_windowized = utils.windowize_ground_truth_labels(
+            df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
                     df_a_ground_truth,
                     seq_size # window/sequence size
                     )
@@ -337,7 +337,9 @@ if __name__ == '__main__':
             #                         will be classified as anomalous, which is 
             #                         referred to as "false positives" in other
             #                         papers (about anomaly detection)
-            not_detected, em = ut.evaluate_all(results_ut, df_a_ground_truth_windowized)
+            not_detected, em = ut.evaluate_all_2(results_ut, df_a_ground_truth_windowized)
+            # print(not_detected)
+            # exit()
             logging.info( ut.format_evaluation_metrics(em) )
 
             method_name = f'unique_transitions (seq_size={seq_size})'
@@ -361,11 +363,11 @@ if __name__ == '__main__':
             # - results_df (df with columns: loss, threshold, anomaly, window_start, window_end)
             # - anomalies_df (just like results_df but only containing rows for anomalous windows)
             results_lstm = la.predict_all(df_a)
-            df_a_ground_truth_windowized = utils.windowize_ground_truth_labels(
+            df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
                     df_a_ground_truth,
                     window_size 
                     )
-            not_detected, em = la.evaluate_all(results_lstm, df_a_ground_truth_windowized)
+            not_detected, em = la.evaluate_all_2(results_lstm, df_a_ground_truth_windowized)
             logging.info( la.format_evaluation_metrics(em) )
             # logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
             # logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')

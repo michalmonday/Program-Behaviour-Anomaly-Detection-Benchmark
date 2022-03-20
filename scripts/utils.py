@@ -225,18 +225,28 @@ def windowize_ground_truth_labels(ground_truth_labels, window_size):
 def windowize_ground_truth_labels_2(ground_truth_labels, window_size):
     # rolling apply modifies dtype of dataframe for performance 
     # reasons so later it is converted to bool again
-    def f(window):
-        return ','.join([str(i) for i in window.index.values])
+    # def f(window):
+    #     return ','.join([str(i) for i in window.index.values])
     # gtl = ground_truth_labels.rolling(window_size).apply(f)
     gtl = pd.DataFrame()
     ground_truth_labels_id_mask = get_anomaly_identifier_mask(ground_truth_labels)
+    # print(ground_truth_labels)
+    # print(ground_truth_labels_id_mask)
+
+    def convert_to_set(win_col):
+        if win_col.isnull().any():
+            return np.NaN
+        return set(win_col.dropna().values) - {-1}
+
     for window in ground_truth_labels_id_mask.rolling(window_size):
         if window.shape[0] < window_size:
             continue
-        values = [set(window[c].dropna().values.astype(int)) for c in window]
+        values = [convert_to_set(window[c]) for c in window]
+        # values = [set(window[c].values.astype(int)) for c in window]
         values = pd.Series(values).values.reshape(1,-1)
         df_row = pd.DataFrame(values, columns=window.columns)
         gtl = pd.concat([gtl, df_row])
+    gtl[ground_truth_labels.isnull()] = np.NaN
 
     # gtl[gtl.notna()] = gtl.astype(bool)
     return gtl.reset_index(drop=True)
@@ -309,7 +319,24 @@ def save_figure(fig, fname, images_dir):
 def get_same_consecutive_values_ranges(series, specific_values=[]):
     ''' Specific values may be used to get the ranges on anomalies only for example, 
         by setting it to "specific_values=[True]", assumming "True" means anomaly, 
-        which is the case in this suite. '''
+        which is the case in this suite.
+
+        Example input:
+        - series:
+            0     True
+            1     True
+            2    False
+            3    False
+            4    False
+            5    False
+            6     True
+            7     True
+        - specific_values: 
+            [True]
+
+        Corresponding returned ranges list: 
+            [(0, 1), (6, 7)]     
+        '''
     s = series.dropna()
     ranges = []
     for k,v in s.groupby((s.shift() != s).cumsum()): 
@@ -321,22 +348,28 @@ def get_same_consecutive_values_ranges(series, specific_values=[]):
 anomaly_id = 0
 def get_anomaly_identifier_mask(df_gt):
     ''' It turns:
-                test.pc  test2.pc  test3.pc
-            0    False      True      True
-            1     True      True     False
-            2    False     False      True
-            3    False     False     False
-            4    False     False     False
-            5    False     False     False
-            6    False      True     False
+               test.pc  test2.pc test3.pc 
+            0    False      True     True 
+            1     True      True    False 
+            2    False     False     True 
+            3    False     False    False 
+            4    False     False    False 
+            5    False     False    False 
+            6    False      True    False 
+            7    False      True      NaN 
         Into:
-            df_a_ground_truth_windowized:
-              test.pc test2.pc test3.pc
-            0     {0}      {1}   {3, 4}
-            1     {0}      {1}      {4}
-            2      {}       {}      {4}
-            3      {}       {}       {}
-            4      {}      {2}       {}     '''
+               test.pc  test2.pc  test3.pc
+            0     -1.0       1.0       3.0
+            1      0.0       1.0      -1.0
+            2     -1.0      -1.0       4.0
+            3     -1.0      -1.0      -1.0
+            4     -1.0      -1.0      -1.0
+            5     -1.0      -1.0      -1.0
+            6     -1.0       2.0      -1.0
+            7     -1.0       2.0       NaN  
+        Where -1 indicates lack of anomalies, and NaN indicates
+        the program has less program counter values than the longest 
+        testing program. '''
     global anomaly_id 
     anomaly_id = 0
     def f(col): 
@@ -346,6 +379,7 @@ def get_anomaly_identifier_mask(df_gt):
         for first, last in ranges:
             col_copy.iloc[first:last+1] = anomaly_id
             anomaly_id += 1
+        col_copy[col_copy.isnull() & col.notnull()] = -1
         return col_copy
     return df_gt.apply(f)
 

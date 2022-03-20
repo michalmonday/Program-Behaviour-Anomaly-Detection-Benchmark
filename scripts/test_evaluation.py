@@ -17,7 +17,8 @@ df_a_ground_truth = pd.DataFrame(
         [False, False, False],
         [False, False, False],
         [False, False, False],
-        [False, True,  False]
+        [False, True,  False],
+        [False, True,  np.NaN]
     ],
     columns=['test.pc', 'test2.pc', 'test3.pc'])
 
@@ -25,11 +26,12 @@ results_ut = np.array([
         # 2 rows below are not used because sequence/window size is 3
         # [False, False, False],
         # [False, False, False],
+        [False, False, False],
         [False, False, True],
         [False, False, False],
         [False, False, False],
-        [False, False, False],
-        [True, False, False]
+        [True, False, False],
+        [False, False]
     ]).T
 
 seq_size = 3
@@ -56,8 +58,6 @@ print(df_a_ground_truth_windowized)
 dm = Detection_Model()
 # not_detected, em = dm.evaluate_all(results_ut, df_a_ground_truth_windowized)
 not_detected, em = dm.evaluate_all_2(results_ut, df_a_ground_truth_windowized)
-
-import pdb; pdb.set_trace()
 
 print('\n\nRESULTS:')
 print(dm.format_evaluation_metrics(em))

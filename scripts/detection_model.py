@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import logging
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
+from functools import reduce
 
 class Detection_Model:
     evaluation_metrics = [
@@ -174,72 +175,51 @@ class Detection_Model:
         # all test examples (in other words, flatten nested list)
         all_detection_results = [val for results in results_all for val in results]
 
-        x = df_a_ground_truth_windowized.copy()
-        # get indices of all consecutive anomaly duplicates from all runs and merge them together into one pd.Series
-        # x = x[ x[ x.shift(1) == x ] == True ].melt().drop('variable', axis=1)['value'].dropna()
-        x[:] = x.shift(1, fill_value=set()).values & x.values# ].melt().drop('variable', axis=1)['value'].dropna()
+        # x = df_a_ground_truth_windowized.copy()
+        # # get indices of all consecutive anomaly duplicates from all runs and merge them together into one pd.Series
+        # # x = x[ x[ x.shift(1) == x ] == True ].melt().drop('variable', axis=1)['value'].dropna()
+        # x[:] = x.shift(1, fill_value=set()).values & x.values# ].melt().drop('variable', axis=1)['value'].dropna()
 
         # all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()['melted']
 
         melted_ground_truth = pd.melt(df_a_ground_truth_windowized.reset_index(), id_vars=['index']).dropna()
-        false_positives = np.where(melted_ground_truth.value.values, np.NaN, all_detection_results).reshape(-1,1)
-        import pdb; pdb.set_trace()
-        # all_ground_truth = melted_ground_truth['value'].dropna()
-        # consecutive_index_groups are used to avoid treating a single anomalous program counter as multiple anomalies
-        # just because of the window/sequence size being larger than 1 
-        # consecutive_index_groups = __class__.get_consecutive_index_groups(x, index_list=melted_ground_truth.index.tolist())
-
-        for group in consecutive_index_groups:
-            # pi = preserved index (of all_detection_results)
-            pi = group[0] - 1
-            try:
-                if not all_detection_results[pi]:
-                    # set the predicted value at the first index of truly anomalous consecutive window sequence to True
-                    # if any of the windows (within sequence) was predicted anomalous
-                    all_detection_results[pi] = any(all_detection_results[pi:group[-1]+1])
-            except Exception as e:
-                logging.error(e)
-                import pdb; pdb.set_trace()
-
-            # set all consecutive anomalous windows to be normal (except the first, preserved index)
-            all_detection_results[group[0]:group[-1]+1] = [False] * len(group)
-
-            # ugly because of mixing positional and label based indexing (which requires index slicing since
-            # depreciation of "ix" method)
-            melted_ground_truth.loc[ melted_ground_truth.index[ group[0]:group[-1]+1 ]  , 'value'] = False
-            
-        # all_detection_results[1] = True # TODO: DELETE (it allowed verifying correctness of evaluation metrics)
-        all_ground_truth = melted_ground_truth['value'].values.reshape(-1).tolist()
         # import pdb; pdb.set_trace()
-        precision, recall, fscore, support = precision_recall_fscore_support(all_ground_truth, all_detection_results, zero_division=0)
-                # all_ground_truth.values.reshape(-1).tolis(), 
-                # all_detection_results
-                # )
+        false_positives = melted_ground_truth[ np.where(melted_ground_truth.value.values, False, all_detection_results) ]
+        non_anomalous = melted_ground_truth[ melted_ground_truth.value == set() ]
+        non_anomaly_count = non_anomalous.shape[0]
+        false_positives_count = false_positives.shape[0]
 
-        # anomaly_recall and false_positives_ratio are sufficient for evaluation of the anomaly
-        # detection system in our case. However, it may be good idea to output the total vs detected
-        # anomalies, and total non-anomalies vs false positives (just for the sake of verifying 
-        # that evaluation metrics are calculated appropriately, it also gives more insight to us)
-        tn, fp, fn, tp = confusion_matrix(all_ground_truth, all_detection_results).ravel()
+        # get all anomaly ids 
+        all_anomalies = reduce(lambda s, s2: s|s2, melted_ground_truth.value.values)
+
+        # get all detected anomaly ids (even if they were detected in 1 window despite being able to be detected in many)
+        detected_anomalies = reduce(lambda s, s2: s|s2, melted_ground_truth[all_detection_results].value.values)
+        
+        # set below is mainly for printing not detected anomaly counts
+        # not_detected_anomalies_set = all_anomalies - detected_anomalies
+        anomaly_recall = len(detected_anomalies) / len(all_anomalies)
+
+        # Series below is mainly for plotting not detected regions
+        x = melted_ground_truth.value.apply(lambda x: x - detected_anomalies)
+        not_detected_anomalies = melted_ground_truth[x!=set()]
+        not_detected_anomalies.drop_duplicates(subset=['value'], inplace=True)
 
         evaluation_metrics = {
             ####################################################
             # 2 MAIN evaluation metrics
 
             # what percent of anomalies will get detected
-            'anomaly_recall' : recall[1],
+            'anomaly_recall' : anomaly_recall,
             # what percent of normal program behaviour will be classified as anomalous
-            'false_positives_ratio' : 1 - recall[0],
+            'false_positives_ratio' : false_positives_count / non_anomaly_count,
 
             #####################################################
             # Some additional metrics for verification purposes
-            'anomaly_count' : fn + tp,
-            'detected_anomaly_count' : tp,
-            'non_anomaly_count' : tn + fp,
-            'false_positives' : fp
-                }
-        mgt = melted_ground_truth['value'].reset_index(drop=True)
-        not_detected_anomalies = melted_ground_truth.iloc[ mgt[ (mgt == True) & (pd.Series(all_detection_results) == False) ].index ]
+            'anomaly_count' : len(all_anomalies),
+            'detected_anomaly_count' : len(detected_anomalies),
+            'non_anomaly_count' : non_anomaly_count,
+            'false_positives' : false_positives_count
+            }
         # if not not_detected_anomalies.empty:
         #     logging.info('Not detected anomalies:')
         #     logging.info(not_detected_anomalies)
