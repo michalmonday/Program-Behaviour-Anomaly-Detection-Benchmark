@@ -202,7 +202,9 @@ class Detection_Model:
         # Series below is mainly for plotting not detected regions
         x = melted_ground_truth.value.apply(lambda x: x - detected_anomalies)
         not_detected_anomalies = melted_ground_truth[x!=set()]
-        not_detected_anomalies.drop_duplicates(subset=['value'], inplace=True)
+        # not_detected_anomalies.drop_duplicates(subset=['value'], inplace=True)
+        not_detected_anomalies = not_detected_anomalies[ (not_detected_anomalies.value - not_detected_anomalies.value.shift(1)) != set() ]
+
 
         evaluation_metrics = {
             ####################################################
