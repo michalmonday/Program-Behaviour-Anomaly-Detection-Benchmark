@@ -23,10 +23,9 @@ df_a_ground_truth = pd.DataFrame(
     columns=['test.pc', 'test2.pc', 'test3.pc'])
 
 results_ut = np.array([
-        # 2 rows below are not used because sequence/window size is 3
-        # [False, False, False],
-        # [False, False, False],
-        [False, False, False],
+        [False, False, False], # some of the starting rows will be deleted
+        [False, False, False], # depending on the chosen sequence size
+        [False, False, False], # e.g. if seq_size is 3 then 2 rows will be deleted 
         [False, False, True],
         [False, False, False],
         [False, False, False],
@@ -34,7 +33,10 @@ results_ut = np.array([
         [False, False]
     ]).T
 
-seq_size = 3
+seq_size = 5
+
+results_ut = results_ut[seq_size-1:]
+
 
 # df_a_ground_truth_windowized = utils.windowize_ground_truth_labels(
 #         df_a_ground_truth,
