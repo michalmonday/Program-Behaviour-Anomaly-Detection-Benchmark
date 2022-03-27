@@ -123,33 +123,35 @@ class Detection_Model:
         # all_detection_results[1] = True # TODO: DELETE (it allowed verifying correctness of evaluation metrics)
         all_ground_truth = melted_ground_truth['value'].values.reshape(-1).tolist()
         # import pdb; pdb.set_trace()
-        precision, recall, fscore, support = precision_recall_fscore_support(all_ground_truth, all_detection_results, zero_division=0)
-                # all_ground_truth.values.reshape(-1).tolis(), 
-                # all_detection_results
-                # )
 
-        # anomaly_recall and false_positives_ratio are sufficient for evaluation of the anomaly
-        # detection system in our case. However, it may be good idea to output the total vs detected
-        # anomalies, and total non-anomalies vs false positives (just for the sake of verifying 
-        # that evaluation metrics are calculated appropriately, it also gives more insight to us)
-        tn, fp, fn, tp = confusion_matrix(all_ground_truth, all_detection_results).ravel()
+        #precision, recall, fscore, support = precision_recall_fscore_support(all_ground_truth, all_detection_results, zero_division=0)
+        #        # all_ground_truth.values.reshape(-1).tolis(), 
+        #        # all_detection_results
+        #        # )
 
-        evaluation_metrics = {
-            ####################################################
-            # 2 MAIN evaluation metrics
+        ## anomaly_recall and false_positives_ratio are sufficient for evaluation of the anomaly
+        ## detection system in our case. However, it may be good idea to output the total vs detected
+        ## anomalies, and total non-anomalies vs false positives (just for the sake of verifying 
+        ## that evaluation metrics are calculated appropriately, it also gives more insight to us)
+        #tn, fp, fn, tp = confusion_matrix(all_ground_truth, all_detection_results).ravel()
 
-            # what percent of anomalies will get detected
-            'anomaly_recall' : recall[1],
-            # what percent of normal program behaviour will be classified as anomalous
-            'false_positives_ratio' : 1 - recall[0],
+        #evaluation_metrics = {
+        #    ####################################################
+        #    # 2 MAIN evaluation metrics
 
-            #####################################################
-            # Some additional metrics for verification purposes
-            'anomaly_count' : fn + tp,
-            'detected_anomaly_count' : tp,
-            'non_anomaly_count' : tn + fp,
-            'false_positives' : fp
-                }
+        #    # what percent of anomalies will get detected
+        #    'anomaly_recall' : recall[1],
+        #    # what percent of normal program behaviour will be classified as anomalous
+        #    'false_positives_ratio' : 1 - recall[0],
+
+        #    #####################################################
+        #    # Some additional metrics for verification purposes
+        #    'anomaly_count' : fn + tp,
+        #    'detected_anomaly_count' : tp,
+        #    'non_anomaly_count' : tn + fp,
+        #    'false_positives' : fp
+        #        }
+        evaluation_metrics = utils.labels_to_evaluation_metrics(all_ground_truth, all_detection_results)
         mgt = melted_ground_truth['value'].reset_index(drop=True)
         not_detected_anomalies = melted_ground_truth.iloc[ mgt[ (mgt == True) & (pd.Series(all_detection_results) == False) ].index ]
         # if not not_detected_anomalies.empty:

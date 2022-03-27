@@ -6,6 +6,9 @@ from math import ceil, floor, sqrt
 import matplotlib.pyplot as plt
 import re
 import os
+from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
+
+from artificial_anomalies import Artificial_Anomalies
 
 TITLE_SIZE = 20
 
@@ -382,6 +385,100 @@ def get_anomaly_identifier_mask(df_gt):
         col_copy[col_copy.isnull() & col.notnull()] = -1
         return col_copy
     return df_gt.apply(f)
+
+def generate_artificial_anomalies(df_n, offsets_count, anomaly_methods=[], reduce_loops=True, min_iteration_size=50):
+    if not anomaly_methods:
+        anomaly_methods = [
+            Artificial_Anomalies.randomize_section,
+            Artificial_Anomalies.slightly_randomize_section,
+            Artificial_Anomalies.minimal
+            ]
+    anomalies_ranges = []
+    pre_anomaly_values = []
+    df_a = pd.DataFrame()
+    df_a_ground_truth = pd.DataFrame(dtype=bool)
+    # Introduce artificial anomalies for all the files, resulting in the following testing examples:
+    # - method 1 with file 1
+    # - method 1 with file 2
+    # - method 2 with file 1
+    # - method 2 with file 2
+    # - method 3 with file 1
+    # - method 3 with file 2
+    # 
+    # Where "method" is a one of the methods from "Artificial_Anomalies" class (e.g. randomize_section, slightly_randomize_section, minimal)
+    # and where "file" is a normal/baseline file containing program counters.
+    # Example above shows only 3 methods and 2 files, but the principle applies for any number.
+    # So with 5 methods and 5 normal pc files there would be 25 testing examples.
+
+    for i, method in enumerate(anomaly_methods):
+        # for each normal/baseline append column with introduced anomalies into into "df_a"
+        for j, column_name in enumerate(df_n):
+            for k in range(offsets_count):
+                # introduce anomalies
+                col_a, ar, pav, col_a_ground_truth = method(df_n[column_name].copy())
+                # keep record of anomalies and previous values (for plotting later)
+                anomalies_ranges.append(ar)
+                pre_anomaly_values.append(pav)
+                # rename column
+                new_column_name = column_name.replace('normal', f'{method.__name__}_({i},{j},{k})', 1)
+                df_a[new_column_name] = col_a
+                df_a_ground_truth[new_column_name] = col_a_ground_truth
+
+    # REDUCE LOOPS
+    # Reducing loops can't be very randomized so it's done after all other 
+    # anomalies are introduced (where program counter values are randomized).
+    for j, column_name in enumerate(df_n):
+        new_column_name = column_name.replace('normal', f'reduced_loops', 1)
+        col, first_iteration_ranges, reduced_ranges, col_a_ground_truth = Artificial_Anomalies.reduce_loops(
+                df_n[column_name],
+                min_iteration_size=min_iteration_size
+                )
+        new_column = pd.Series([np.NaN]*df_n.shape[0])
+        new_column[0:col.shape[0]] = col
+        # logging.info(f'new_column: {new_column}')
+        # pav = pd.Series()
+        df_a[new_column_name] = new_column
+        df_a_ground_truth[new_column_name] = col_a_ground_truth
+        pav = []
+        # TODO: append original values based on "col.probably_loc[reduced_range] for reduced_range in reduced_ranges"
+        for r in sorted(reduced_ranges):
+            # pav = pav.combine(col.loc[r[0]:r[1]], max, fill_value=-1)
+            pav.append(df_n[column_name].loc[r[0]:r[1]].copy())
+        # specific_values=[True] will return anomaly ranges only
+        ar = get_same_consecutive_values_ranges(col_a_ground_truth, specific_values=[True])
+        pre_anomaly_values.append(pav)
+        anomalies_ranges.append(ar)
+
+    return df_a, df_a_ground_truth, anomalies_ranges, pre_anomaly_values
+
+def dfs_to_XY(dfs):
+    df = pd.concat(dfs)
+    df = df.sample(frac=1) # shuffle
+    y = df.pop('label')
+    X = df
+    return X,y
+
+def labels_to_evaluation_metrics(y_test, y_pred):
+
+    precision, recall, fscore, support = precision_recall_fscore_support(y_test, y_pred, zero_division=0)
+    tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+    evaluation_metrics = {
+        ####################################################
+        # 2 MAIN evaluation metrics
+
+        # what percent of anomalies will get detected
+        'anomaly_recall' : recall[1],
+        # what percent of normal program behaviour will be classified as anomalous
+        'false_positives_ratio' : 1 - recall[0],
+
+        #####################################################
+        # Some additional metrics for verification purposes
+        'anomaly_count' : fn + tp,
+        'detected_anomaly_count' : tp,
+        'non_anomaly_count' : tn + fp,
+        'false_positives' : fp
+            }
+    return evaluation_metrics
 
 if __name__ == '__main__':
     print( sanitize_fname('abc.,(-):123') )

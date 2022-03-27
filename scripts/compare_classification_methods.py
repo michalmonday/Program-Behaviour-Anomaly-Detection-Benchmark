@@ -138,6 +138,7 @@ import sys
 import json
 from copy import deepcopy
 from math import ceil, floor, sqrt
+from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 
 import utils
 from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files, plot_vspans, plot_vspans_ranges, print_config
@@ -146,6 +147,7 @@ from lstm_autoencoder import lstm_autoencoder
 from lstm_autoencoder.lstm_autoencoder import LSTM_Autoencoder
 from unique_transitions.unique_transitions import Unique_Transitions
 from detection_model import Detection_Model
+from conventional_machine_learning import conventional_machine_learning as conventional_ml
 
 import logging
 logging.basicConfig(format='%(message)s', level=logging.INFO)
@@ -228,78 +230,21 @@ if __name__ == '__main__':
                 load_address     = conf['data'].getint('abnormal_load_address')
                 )
     else:
-        df_a = pd.DataFrame()
-        df_a_ground_truth = pd.DataFrame(dtype=bool)
-        all_anomaly_methods = [
-                Artificial_Anomalies.randomize_section,
-                Artificial_Anomalies.slightly_randomize_section,
-                Artificial_Anomalies.minimal,
-                ]
-        # Introduce artificial anomalies for all the files, resulting in the following testing examples:
-        # - method 1 with file 1
-        # - method 1 with file 2
-        # - method 2 with file 1
-        # - method 2 with file 2
-        # - method 3 with file 1
-        # - method 3 with file 2
-        # 
-        # Where "method" is a one of the methods from "Artificial_Anomalies" class (e.g. randomize_section, slightly_randomize_section, minimal)
-        # and where "file" is a normal/baseline file containing program counters.
-        # Example above shows only 3 methods and 2 files, but the principle applies for any number.
-        # So with 5 methods and 5 normal pc files there would be 25 testing examples.
-
-        offsets_count = conf['data'].getint('artificial_anomalies_offsets_count')
-        for i, method in enumerate(all_anomaly_methods):
-
-            # for each normal/baseline append column with introduced anomalies into into "df_a"
-            for j, column_name in enumerate(df_n):
-                for k in range(offsets_count):
-                    # introduce anomalies
-                    col_a, ar, pav, col_a_ground_truth = method(df_n[column_name].copy())
-                    # keep record of anomalies and previous values (for plotting later)
-                    anomalies_ranges.append(ar)
-                    pre_anomaly_values.append(pav)
-                    # rename column
-                    new_column_name = column_name.replace('normal', f'{method.__name__}_({i},{j},{k})', 1)
-                    df_a[new_column_name] = col_a
-                    df_a_ground_truth[new_column_name] = col_a_ground_truth
-
-        # REDUCE LOOPS
-        # Reducing loops can't be very randomized so it's done after all other 
-        # anomalies are introduced (where program counter values are randomized).
-        min_iteration_size = conf['data'].getint('artificial_anomalies_reduce_loops_min_iteration_size')
-        for j, column_name in enumerate(df_n):
-            new_column_name = column_name.replace('normal', f'reduced_loops', 1)
-            col, first_iteration_ranges, reduced_ranges, col_a_ground_truth = Artificial_Anomalies.reduce_loops(
-                    df_n[column_name],
-                    min_iteration_size=min_iteration_size
-                    )
-            new_column = pd.Series([np.NaN]*df_n.shape[0])
-            new_column[0:col.shape[0]] = col
-            # logging.info(f'new_column: {new_column}')
-            # pav = pd.Series()
-            df_a[new_column_name] = new_column
-            df_a_ground_truth[new_column_name] = col_a_ground_truth
-            pav = []
-            # TODO: append original values based on "col.probably_loc[reduced_range] for reduced_range in reduced_ranges"
-            for r in sorted(reduced_ranges):
-                # pav = pav.combine(col.loc[r[0]:r[1]], max, fill_value=-1)
-                pav.append(df_n[column_name].loc[r[0]:r[1]].copy())
-            # specific_values=[True] will return anomaly ranges only
-            ar = utils.get_same_consecutive_values_ranges(col_a_ground_truth, specific_values=[True])
-            pre_anomaly_values.append(pav)
-            anomalies_ranges.append(ar)
-
-    
-    
+        df_a, df_a_ground_truth, anomalies_ranges, pre_anomaly_values = utils.generate_artificial_anomalies(
+                df_n,
+                conf['data'].getint('artificial_anomalies_offsets_count'),
+                reduce_loops = True,
+                min_iteration_size = conf['data'].getint('artificial_anomalies_reduce_loops_min_iteration_size')
+                )
 
     # df_a.iloc[:,-1].dropna().plot()
     # plt.plot(df_a_ground_truth.iloc[:,-1].dropna().values * df_a.iloc[:,-1].max())
     # plt.show()
-    plot_data(pd.DataFrame(), df_a.iloc[:,-2:], anomalies_ranges=anomalies_ranges[-2:])
-    plot_data(pd.DataFrame(), df_a.iloc[:,-2:], anomalies_ranges=anomalies_ranges[-2:], pre_anomaly_values=pre_anomaly_values[-2:])
 
-    # import pdb; pdb.set_trace()
+
+    # Plot reduced loops:
+    # plot_data(pd.DataFrame(), df_a.iloc[:,-2:], anomalies_ranges=anomalies_ranges[-2:])
+    # plot_data(pd.DataFrame(), df_a.iloc[:,-2:], anomalies_ranges=anomalies_ranges[-2:], pre_anomaly_values=pre_anomaly_values[-2:])
 
     logging.info(f'Number of normal pc files: {df_n.shape[1]}')
     logging.info(f'Number of abnormal pc files: {df_a.shape[1]}')
@@ -316,6 +261,47 @@ if __name__ == '__main__':
 
     df_results = pd.DataFrame(columns=Detection_Model.evaluation_metrics)
 
+    if conf['conventional_machine_learning'].getboolean('active'):
+        window_size = 10
+        normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True)
+        abnormal_windows = utils.pc_df_to_sliding_windows(df_a, window_size=window_size, unique=True)
+        # remove normal_windows from abnormal_windows
+        abnormal_windows = abnormal_windows.merge(normal_windows, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
+
+        normal_windows['label'] = 0
+        abnormal_windows['label'] = 1
+
+        # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(0.5 * abnormal_windows.shape[0])])
+        abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [normal_windows.shape[0]])
+
+        # concatenate (pd.concat), shuffle (df.sample) and turn "label" column into y (df.pop)
+        X_train, y_train = utils.dfs_to_XY([normal_windows, abnormal_windows_train])
+        X_test, y_test = utils.dfs_to_XY([normal_windows, abnormal_windows_test])
+
+        conventional_ml.assign_min_max_for_normalization(X_train)
+        X_train = conventional_ml.normalize(X_train)
+        X_test = conventional_ml.normalize(X_test)
+
+        # df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
+        #         df_a_ground_truth,
+        #         window_size # window/sequence size
+        #         )
+        # import pdb; pdb.set_trace()
+
+        # generate mixed (normal+abnormal) training dataset
+        # generate test dataset that consists of:
+        # - abnormal examples not used in training
+        # - normal examples used in training
+
+        # conventional_ml.assign_min_max_for_normalization()
+        # conventional_ml.normalize()
+        for model in conventional_ml.models:
+            name = f'{model.__class__.__name__} (n={window_size})'
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
+            evaluation_metrics = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
+            df_results.loc[name] = evaluation_metrics
+
     if conf['unique_transitions'].getboolean('active'):
         # Unique transitions
         sequence_sizes = [int(seq_size) for seq_size in conf['unique_transitions'].get('sequence_sizes').strip().split(',')]
@@ -330,6 +316,7 @@ if __name__ == '__main__':
                     df_a_ground_truth,
                     seq_size # window/sequence size
                     )
+            import pdb; pdb.set_trace()
             # df_a_ground_truth_windowized = df_a_ground_truth
 
             # anomaly_recall = what percent of anomalies will get detected
