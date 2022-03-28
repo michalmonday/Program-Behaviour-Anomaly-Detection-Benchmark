@@ -489,9 +489,16 @@ def store_csvs_for_external_testing(df_n, df_a, df_a_ground_truth):
     df_a.to_csv('df_a.csv', **to_csv_kwargs)
     (df_a_ground_truth*1).to_csv('df_a_ground_truth.csv', **to_csv_kwargs) # *1 converts bool to int with preserving NaN
 
-    df_n.melt().drop('variable', axis=1).dropna().to_csv('df_n_single.csv', **to_csv_kwargs)
-    df_a.melt().drop('variable', axis=1).dropna().to_csv('df_a_single.csv', **to_csv_kwargs)
-    (df_a_ground_truth*1).melt().drop('variable', axis=1).dropna().to_csv('df_a_ground_truth_single.csv', **to_csv_kwargs)
+    fig, axs = plt.subplots(3)
+    df_n_single = df_n.melt(value_name='df_n_single').drop('variable', axis=1).dropna().reset_index(drop=True)
+    df_n_single.to_csv('df_n_single.csv', **to_csv_kwargs)
+    df_n_single.plot(ax=axs[0])
+    df_a_single = df_a.melt(value_name='df_a_single').drop('variable', axis=1).dropna().reset_index(drop=True)
+    df_a_single.to_csv('df_a_single.csv', **to_csv_kwargs)
+    df_a_single.plot(ax = axs[1])
+    df_a_ground_truth_single = (df_a_ground_truth*1).melt(value_name='df_a_ground_truth_single').drop('variable', axis=1).dropna().reset_index(drop=True)
+    df_a_ground_truth_single.to_csv('df_a_ground_truth_single.csv', **to_csv_kwargs)
+    df_a_ground_truth_single.plot(ax=axs[2])
 
 
 
