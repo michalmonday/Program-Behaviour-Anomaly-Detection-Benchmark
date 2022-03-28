@@ -459,7 +459,6 @@ def dfs_to_XY(dfs):
     return X,y
 
 def labels_to_evaluation_metrics(y_test, y_pred):
-
     precision, recall, fscore, support = precision_recall_fscore_support(y_test, y_pred, zero_division=0)
     tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
     evaluation_metrics = {
@@ -479,6 +478,18 @@ def labels_to_evaluation_metrics(y_test, y_pred):
         'false_positives' : fp
             }
     return evaluation_metrics
+
+def store_csvs_for_external_testing(df_n, df_a, df_a_ground_truth):
+    df_n.to_csv('df_n.csv', index=False)
+    df_a.to_csv('df_a.csv', index=False)
+    # def to_int(x):
+    #     if x == True:
+    #         return 1
+    #     if x == False:
+    #         return 0
+    #     return np.NaN
+    # df_a_ground_truth.applymap(to_int).to_csv('df_a_ground_truth.csv', index=False)
+    (df_a_ground_truth*1).to_csv('df_a_ground_truth.csv', index=False)
 
 if __name__ == '__main__':
     print( sanitize_fname('abc.,(-):123') )

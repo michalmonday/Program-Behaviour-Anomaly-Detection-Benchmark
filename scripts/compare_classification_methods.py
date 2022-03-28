@@ -237,6 +237,9 @@ if __name__ == '__main__':
                 min_iteration_size = conf['data'].getint('artificial_anomalies_reduce_loops_min_iteration_size')
                 )
 
+        df_a.to_csv('df_a.csv')
+        df_a_ground_truth.to_csv('df_a.csv')
+
     # df_a.iloc[:,-1].dropna().plot()
     # plt.plot(df_a_ground_truth.iloc[:,-1].dropna().values * df_a.iloc[:,-1].max())
     # plt.show()
@@ -248,6 +251,8 @@ if __name__ == '__main__':
 
     logging.info(f'Number of normal pc files: {df_n.shape[1]}')
     logging.info(f'Number of abnormal pc files: {df_a.shape[1]}')
+
+    utils.store_csvs_for_external_testing(df_n, df_a, df_a_ground_truth)
 
     if args.plot_data:
         plot_data(
@@ -262,45 +267,47 @@ if __name__ == '__main__':
     df_results = pd.DataFrame(columns=Detection_Model.evaluation_metrics)
 
     if conf['conventional_machine_learning'].getboolean('active'):
-        window_size = 10
-        normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True)
-        abnormal_windows = utils.pc_df_to_sliding_windows(df_a, window_size=window_size, unique=True)
-        # remove normal_windows from abnormal_windows
-        abnormal_windows = abnormal_windows.merge(normal_windows, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
+        window_sizes = [int(ws) for ws in conf['conventional_machine_learning'].get('window_sizes').strip().split(',')]
+        for window_size in window_sizes:
+            normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True)
+            abnormal_windows = utils.pc_df_to_sliding_windows(df_a, window_size=window_size, unique=True)
+            # remove normal_windows from abnormal_windows
+            abnormal_windows = abnormal_windows.merge(normal_windows, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
 
-        normal_windows['label'] = 0
-        abnormal_windows['label'] = 1
+            normal_windows['label'] = 0
+            abnormal_windows['label'] = 1
 
-        # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(0.5 * abnormal_windows.shape[0])])
-        abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [normal_windows.shape[0]])
+            # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(0.5 * abnormal_windows.shape[0])])
+            abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [normal_windows.shape[0]])
 
-        # concatenate (pd.concat), shuffle (df.sample) and turn "label" column into y (df.pop)
-        X_train, y_train = utils.dfs_to_XY([normal_windows, abnormal_windows_train])
-        X_test, y_test = utils.dfs_to_XY([normal_windows, abnormal_windows_test])
+            # concatenate (pd.concat), shuffle (df.sample) and turn "label" column into y (df.pop)
+            X_train, y_train = utils.dfs_to_XY([normal_windows, abnormal_windows_train])
+            X_test, y_test = utils.dfs_to_XY([normal_windows, abnormal_windows_test])
 
-        conventional_ml.assign_min_max_for_normalization(X_train)
-        X_train = conventional_ml.normalize(X_train)
-        X_test = conventional_ml.normalize(X_test)
+            conventional_ml.assign_min_max_for_normalization(X_train)
+            X_train = conventional_ml.normalize(X_train)
+            X_test = conventional_ml.normalize(X_test)
 
-        # df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
-        #         df_a_ground_truth,
-        #         window_size # window/sequence size
-        #         )
-        # import pdb; pdb.set_trace()
+            # df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
+            #         df_a_ground_truth,
+            #         window_size # window/sequence size
+            #         )
+            # import pdb; pdb.set_trace()
 
-        # generate mixed (normal+abnormal) training dataset
-        # generate test dataset that consists of:
-        # - abnormal examples not used in training
-        # - normal examples used in training
+            # generate mixed (normal+abnormal) training dataset
+            # generate test dataset that consists of:
+            # - abnormal examples not used in training
+            # - normal examples used in training
 
-        # conventional_ml.assign_min_max_for_normalization()
-        # conventional_ml.normalize()
-        for model in conventional_ml.models:
-            name = f'{model.__class__.__name__} (n={window_size})'
-            model.fit(X_train, y_train)
-            y_pred = model.predict(X_test)
-            evaluation_metrics = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
-            df_results.loc[name] = evaluation_metrics
+            # conventional_ml.assign_min_max_for_normalization()
+            # conventional_ml.normalize()
+            for model_class in conventional_ml.models:
+                model = model_class()
+                name = f'{model.__class__.__name__} (n={window_size})'
+                model.fit(X_train, y_train)
+                y_pred = model.predict(X_test)
+                evaluation_metrics = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
+                df_results.loc[name] = evaluation_metrics
 
     if conf['unique_transitions'].getboolean('active'):
         # Unique transitions

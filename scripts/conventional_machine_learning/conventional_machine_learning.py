@@ -44,17 +44,17 @@ from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.svm import SVC, LinearSVC, NuSVC
 
 models = [
-    MultinomialNB(),
-    BernoulliNB(),
-    LogisticRegression(),
-    SGDClassifier(),
-    SVC(),
-    LinearSVC()
-    # NuSVC()
+    MultinomialNB,
+    BernoulliNB,
+    LogisticRegression,
+    SGDClassifier,
+    SVC,
+    LinearSVC
     ]
 
 min_val = None
 max_val = None
+
 
 # TODO: For training, supply a set of labeled examples including normal and abnormal.
 
