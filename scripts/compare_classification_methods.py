@@ -279,10 +279,17 @@ if __name__ == '__main__':
 
             # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(0.5 * abnormal_windows.shape[0])])
             abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [normal_windows.shape[0]])
+            logging.info(f'normal_windows count = {normal_windows.shape[0]}')
+            logging.info(f'abnormal_windows count = {abnormal_windows.shape[0]}')
+            logging.info(f'abnormal_windows_train count = {abnormal_windows_train.shape[0]}')
+            logging.info(f'abnormal_windows_test count = {abnormal_windows_test.shape[0]}')
 
             # concatenate (pd.concat), shuffle (df.sample) and turn "label" column into y (df.pop)
             X_train, y_train = utils.dfs_to_XY([normal_windows, abnormal_windows_train])
             X_test, y_test = utils.dfs_to_XY([normal_windows, abnormal_windows_test])
+
+            logging.info(f'X_train count = {X_train.shape[0]}')
+            logging.info(f'X_test count = {X_test.shape[0]}')
 
             conventional_ml.assign_min_max_for_normalization(X_train)
             X_train = conventional_ml.normalize(X_train)

@@ -480,16 +480,20 @@ def labels_to_evaluation_metrics(y_test, y_pred):
     return evaluation_metrics
 
 def store_csvs_for_external_testing(df_n, df_a, df_a_ground_truth):
-    df_n.to_csv('df_n.csv', index=False)
-    df_a.to_csv('df_a.csv', index=False)
-    # def to_int(x):
-    #     if x == True:
-    #         return 1
-    #     if x == False:
-    #         return 0
-    #     return np.NaN
-    # df_a_ground_truth.applymap(to_int).to_csv('df_a_ground_truth.csv', index=False)
-    (df_a_ground_truth*1).to_csv('df_a_ground_truth.csv', index=False)
+    to_csv_kwargs = {
+            'index':False,
+            # 'header':False
+            'header':True
+            }
+    df_n.to_csv('df_n.csv', **to_csv_kwargs)
+    df_a.to_csv('df_a.csv', **to_csv_kwargs)
+    (df_a_ground_truth*1).to_csv('df_a_ground_truth.csv', **to_csv_kwargs) # *1 converts bool to int with preserving NaN
+
+    df_n.melt().drop('variable', axis=1).dropna().to_csv('df_n_single.csv', **to_csv_kwargs)
+    df_a.melt().drop('variable', axis=1).dropna().to_csv('df_a_single.csv', **to_csv_kwargs)
+    (df_a_ground_truth*1).melt().drop('variable', axis=1).dropna().to_csv('df_a_ground_truth_single.csv', **to_csv_kwargs)
+
+
 
 if __name__ == '__main__':
     print( sanitize_fname('abc.,(-):123') )
