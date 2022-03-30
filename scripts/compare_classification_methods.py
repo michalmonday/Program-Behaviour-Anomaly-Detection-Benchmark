@@ -146,6 +146,7 @@ from artificial_anomalies import Artificial_Anomalies
 from lstm_autoencoder import lstm_autoencoder
 from lstm_autoencoder.lstm_autoencoder import LSTM_Autoencoder
 from unique_transitions.unique_transitions import Unique_Transitions
+from isolation_forest.isolation_forest import Isolation_Forest
 from detection_model import Detection_Model
 from conventional_machine_learning import conventional_machine_learning as conventional_ml
 
@@ -237,9 +238,6 @@ if __name__ == '__main__':
                 min_iteration_size = conf['data'].getint('artificial_anomalies_reduce_loops_min_iteration_size')
                 )
 
-        df_a.to_csv('df_a.csv')
-        df_a_ground_truth.to_csv('df_a.csv')
-
     # df_a.iloc[:,-1].dropna().plot()
     # plt.plot(df_a_ground_truth.iloc[:,-1].dropna().values * df_a.iloc[:,-1].max())
     # plt.show()
@@ -265,6 +263,34 @@ if __name__ == '__main__':
         plt.show()
 
     df_results = pd.DataFrame(columns=Detection_Model.evaluation_metrics)
+
+    if conf['isolation_forest'].getboolean('active'):
+        # LSTM autoencoder
+        # window_size = conf['isolation_forest'].getint('window_size')
+        window_sizes = [int(ws) for ws in conf['isolation_forest'].get('window_sizes').strip().split(',')]
+        for window_size in window_sizes:
+            is_fo = Isolation_Forest()
+            is_fo.train(df_n, n=window_size)
+
+            # results_lstm is a list of tuples where each tuple has:
+            # - is_anomaly (bool)
+            # - results_df (df with columns: loss, threshold, anomaly, window_start, window_end)
+            # - anomalies_df (just like results_df but only containing rows for anomalous windows)
+            results_isfo = is_fo.predict_all(df_a)
+            df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
+                    df_a_ground_truth,
+                    window_size 
+                    )
+            not_detected, em = is_fo.evaluate_all_2(results_isfo, df_a_ground_truth_windowized)
+            logging.info( is_fo.format_evaluation_metrics(em) )
+            # logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
+            # logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')
+            method_name = f'Isolation forest (window_size={window_size})'
+            df_results.loc[method_name] = em
+
+            if not not_detected.empty:
+                fig, axs = utils.plot_undetected_regions(not_detected, df_a, pre_anomaly_values, anomalies_ranges, title=f'Undetected anomalies - {method_name}')
+                utils.save_figure(fig, method_name, images_dir)
 
     if conf['conventional_machine_learning'].getboolean('active'):
         window_sizes = [int(ws) for ws in conf['conventional_machine_learning'].get('window_sizes').strip().split(',')]
@@ -321,6 +347,7 @@ if __name__ == '__main__':
         sequence_sizes = [int(seq_size) for seq_size in conf['unique_transitions'].get('sequence_sizes').strip().split(',')]
         for seq_size in sequence_sizes:
             ut = Unique_Transitions()
+
             ut.train(df_n, n=seq_size)
 
             # results_ua is a list of boolean lists for each file
@@ -330,7 +357,6 @@ if __name__ == '__main__':
                     df_a_ground_truth,
                     seq_size # window/sequence size
                     )
-            import pdb; pdb.set_trace()
             # df_a_ground_truth_windowized = df_a_ground_truth
 
             # anomaly_recall = what percent of anomalies will get detected

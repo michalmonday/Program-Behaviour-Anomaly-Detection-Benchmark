@@ -1,23 +1,19 @@
 #!/usr/bin/python3.7
 
-'''
-! clear; python3.7 % -n ../../log_files/*normal*pc -a ../../log_files/*compr*pc -fr ../../log_files/*json
-'''
-
+###### Step 1: Import Libraries
+import pandas as pd
+import numpy as np
+from collections import Counter
+from sklearn.ensemble import IsolationForest
 
 import re
-import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import sys
 import json
-
 import os
-import sys
 import inspect
 from sklearn.metrics import precision_recall_fscore_support
-
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
@@ -28,64 +24,52 @@ import utils
 from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files
 from detection_model import Detection_Model
 
-# ax = plot_pc_histogram(df, function_ranges, bins=100)
-# ax2 = plot_pc_timeline(df, function_ranges)
-# df = df_from_pc_files(f_list)
-# pc = read_pc_values(f)
+# if_model = IsolationForest(n_estimators=100, random_state=0).fit(X_train)
+# # Predict the anomalies
+# if_prediction = if_model.predict(X_test)
+# # Change the anomalies' values to make it consistent with the true values
+# if_prediction = [1 if i==-1 else 0 for i in if_prediction]
+# # Check the model performance
+# print(classification_report(y_test, if_prediction))
+# # Train the isolation forest model
+# if_model = IsolationForest(n_estimators=100, random_state=0, warm_start=True).fit(X_train)
+# # Use new data to train 50 trees on top of existing model 
+# if_model.n_estimators += 50
+# if_model.fit(X_more)
+# # Predict the anomalies
+# if_prediction = if_model.predict(X_test)
+# # Change the anomalies' values to make it consistent with the true values
+# if_prediction = [1 if i==-1 else 0 for i in if_prediction]
+# # Check the model performance
+# print(classification_report(y_test, if_prediction))
+# ###### Step 6: Isolation Forest With Warm Start On New Trees
+# # Train the isolation forest model
+# if_model = IsolationForest(n_estimators=100, random_state=0, warm_start=True).fit(X_train)
+# # Use the existing data to train 20 trees on top of existing model 
+# if_model.n_estimators += 20
+# if_model.fit(X_train)
+# # Predict the anomalies
+# if_prediction = if_model.predict(X_test)
+# # Change the anomalies' values to make it consistent with the true values
+# if_prediction = [1 if i==-1 else 0 for i in if_prediction]
+# # Check the model performance
+# print(classification_report(y_test, if_prediction))
 
-#def unique_transitions(df, n=2):
-#    ''' returns unique transitions between program counters 
-#        Let's imagine that program consists of the following PC values:
-#            4, 8, 4, 8, 4, 8, 4, 8, 4, 8, 4, 8, 12
-#    
-#        In that case, the returned unique transitions would be:
-#            (4,8)
-#            (8,4)
-#            (8,12)
-#
-#        The returned unique transitions may be used as a Finite State 
-#        Automaton during program execution. Any observed transition will
-#        indicate abnormal behaviour. This approach was used in:
-#            "2001 - A Fast Automaton-Based Method for Detecting Anomalous Program Behaviors by Sekar et al."
-#
-#        This method is simple and effective, however it works on assumption that
-#        normal program goes into every possible valid state during training.
-#        In embedded systems where program execution is determined by the intricate
-#        state of sensors or user input, this isn't possible.
-#
-#        How to extract unique transitions from pandas dataframe containing PC counters?
-#        - stack all program runs PC values (multiple columns) on top of each other (separated by "NaN") in a single column
-#        - clone all_pc column and shift the cloned version by -1
-#        - drop rows with NaN
-#        - get unique pairs from 2 columns
-#    '''
-#    # add NaN row to each column (to avoid recognizing the last PC of 1 run as first PC of 2nd run)
-#    # later "df.dropna()" will just remove these, fixing the problem arising from stacking
-#    # program counters from multiple files on each other
-#    df = df.append(pd.Series(), ignore_index=True)
-#    # stack all columns on top of each other
-#    df = df.melt(value_name='all_pc').drop('variable', axis=1)
-#    # clone all_pc column and shift it by -1
-#    df['all_pc_shifted'] = df['all_pc'].shift(-1)
-#    # drop any rows with at least 1 NaN value ( as seen here: https://stackoverflow.com/a/13434501/4620679 )
-#    df = df.dropna()
-#    # get unique transitions
-#    unique_transitions = df.drop_duplicates()
-#    return unique_transitions
 
-class Unique_Transitions(Detection_Model):
+class Isolation_Forest(Detection_Model):
     def __init__(self):
-        self.normal_ut = None
+        self.model = IsolationForest(n_estimators=100, random_state=0, warm_start=True)
         self.train_n = None
 
     def train(self, df_n, n=2):
-        utils.print_header(f'UNIQUE TRANSITIONS (n={n})')
-        self.normal_ut = utils.pc_df_to_sliding_windows(df_n, window_size=n, unique=True)
+        utils.print_header(f'ISOLATION FOREST (n={n})')
+        normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=n, unique=True)
+        self.model.fit(normal_windows)
         self.train_n = n
 
         logging.info(f'Number of train programs: {df_n.shape[1]}')
         logging.info(f'Longest train program size: {df_n.shape[0]} instructions')
-        logging.info(f'Number of unique train sequences (with size of {n}): {self.normal_ut.shape[0]}')
+        logging.info(f'Number of unique train sequences (with size of {n}): {normal_windows.shape[0]}')
 
     def predict(self, df_a_col):
         # gets abnormal_ut entries that are not present in normal_ut
@@ -96,35 +80,9 @@ class Unique_Transitions(Detection_Model):
         # logging.info(df_a_col)
         # logging.info(type(df_a_col))
 
-        abnormal_ut = utils.pc_df_to_sliding_windows(df_a_col, window_size=self.train_n, unique=True)
-        # detected_ut_orig = abnormal_ut[ ~abnormal_ut[ ~abnormal_ut.stack().isin(self.normal_ut.stack().values).unstack()].isna().all(axis=1) ].dropna()
-        try:
-            detected_ut = abnormal_ut.merge(self.normal_ut, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
-        except Exception as e:
-            logging.error(f'{e}')
-            import pdb; pdb.set_trace()
-
-        # set is used for fast lookup
-        detected_ut_set = set()
-
-        def window_to_str(row):
-            ''' strings are used (stored as a set) to make the lookup fast and easy '''
-            return '-'.join(str(v) for v in row.values)
-
-        def was_detected(row):
-            window_str = window_to_str(row)
-            # logging.info(f'window_str={window_str}')
-            return window_str  in detected_ut_set
-
-        for i, row in detected_ut.iterrows():
-            detected_ut_set.add( window_to_str(row) )
-
-        # get PC values in abnormal run where unseen transitions (detected_ut) are observed
-        # df_a_col_detected_points = df_a_col[ df_a_col.iloc[:,0].rolling(self.train_n).apply(lambda x: was_detected(x) ) > 0.0 ]
-
-        # df_a_col['detected_anomaly'] = df_a_col.iloc[:,0].rolling(self.train_n).apply(lambda x: was_detected(x) ) > 0.0
-        # return df_a_col
-        results = df_a_col.iloc[:,0].rolling(self.train_n).apply(lambda x: was_detected(x) ).dropna() > 0.0
+        abnormal_windows = utils.pc_df_to_sliding_windows(df_a_col, window_size=self.train_n, unique=False)
+        results = self.model.predict(abnormal_windows)
+        results = [i==-1 for i in results]
         return results
 
     # def predict_all(self, df_a):

@@ -372,10 +372,10 @@ class LSTM_Autoencoder(Detection_Model):
         # logging.info('\nExample model.summary():')
         # model.summary()
 
-    def predict(self, df_a):
-        df_a = df_a.dropna()
-        X_test = utils.pc_df_to_sliding_windows(df_a, self.window_size)
-        results_df = pd.DataFrame(np.NaN, index=df_a.index.values[:-self.window_size+1] , columns = ['loss', 'threshold', 'anomaly', 'window_start', 'window_end'])
+    def predict(self, df_a_col):
+        df_a_col = df_a_col.dropna()
+        X_test = utils.pc_df_to_sliding_windows(df_a_col, self.window_size)
+        results_df = pd.DataFrame(np.NaN, index=df_a_col.index.values[:-self.window_size+1] , columns = ['loss', 'threshold', 'anomaly', 'window_start', 'window_end'])
         for i, std_range in enumerate(self.std_ranges):
             model = self.models[i]
             threshold = self.thresholds[i]
@@ -407,8 +407,8 @@ class LSTM_Autoencoder(Detection_Model):
 
         return results_df.anomaly.dropna().values.tolist()
 
-    def predict_all(self, df_a):
-        return [self.predict(df_a[col_a]) for col_a in df_a]
+    # def predict_all(self, df_a):
+    #     return [self.predict(df_a[col_a]) for col_a in df_a]
 
     #def evaluate_all(self, results_all, df_a_ground_truth_windowized):
     #    ''' results_all = return of predict_all function 

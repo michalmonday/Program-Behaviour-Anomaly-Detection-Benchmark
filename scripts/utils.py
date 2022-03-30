@@ -81,8 +81,15 @@ def merge_pc_df_columns(df):
         multiple files (columns), separated by the "separator_value" '''
     # add separator_value row to each column (to avoid recognizing the last PC of 1 run as first PC of 2nd run)
     # df = df.append(pd.Series(), ignore_index=True)
-    df = pd.concat([df, pd.Series(dtype=df.values.dtype)], axis=0)
-    df.iloc[-1] = separator_value
+
+    # it's sad but the concat line below just appends a single row
+    df = pd.concat([
+        df,
+        pd.DataFrame([[separator_value]*df.shape[1]], 
+            index=[df.shape[0]],
+            dtype=df.values.dtype,
+            columns=df.columns)
+        ])
     # stack all columns on top of each other
     df = df.melt(value_name='all_pc').drop('variable', axis=1)
     df = df.dropna()

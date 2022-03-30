@@ -8,12 +8,16 @@ import numpy as np
 import logging
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 from functools import reduce
+from abc import ABC, abstractmethod
 
-class Detection_Model:
+class Detection_Model(ABC):
     evaluation_metrics = [
         'anomaly_recall', 'false_positives_ratio', 'anomaly_count', 
         'detected_anomaly_count', 'non_anomaly_count', 'false_positives'
             ]
+    
+    def __init__(self):
+        super().__init__()
 
     @staticmethod
     def get_consecutive_index_groups(series, index_list=[]):
@@ -243,6 +247,13 @@ class Detection_Model:
         false_positives = em['false_positives']
         return f'anomaly_recall={anomaly_recall:.2f} ({detected_anomaly_count}/{anomaly_count}) false_positives_ratio={false_positives_ratio} ({false_positives}/{non_anomaly_count})'
 
+
+    @abstractmethod
+    def predict(self, df_a):
+        pass
+
+    def predict_all(self, df_a):
+        return [self.predict(df_a[[col_a]]) for col_a in df_a]
         
 
 
