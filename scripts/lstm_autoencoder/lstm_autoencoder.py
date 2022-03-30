@@ -70,19 +70,19 @@ from detection_model import Detection_Model
 #     def train(self, ):
 #         train_window_size = window_size
 # 
-#         utils.print_header(f'LSTM AUTOENCODER (window_size={window_size}, number_of_models={number_of_models})')
+#         utils.print_header(f'LSTM AUTOENCODER (window_size={window_size}, forest_size={forest_size})')
 # 
 #         X_train = utils.pc_df_to_sliding_windows(df_n, window_size, unique=True)
 #         min_vals, max_vals = get_min_max_lists_for_normalization(X_train)
 # 
 #         
 # 
-#         ranges = get_std_ranges(X_train, number_of_models)
-#         logging.info(f'The following {number_of_models} standard deviation ranges are going to be used:')
+#         ranges = get_std_ranges(X_train, forest_size)
+#         logging.info(f'The following {forest_size} standard deviation ranges are going to be used:')
 #         for std_range in ranges:
 #             logging.info(std_range)
 # 
-#         logging.info(f'\nTraining {number_of_models} LSTM autoencoders:')
+#         logging.info(f'\nTraining {forest_size} LSTM autoencoders:')
 #         logging.info(f'   {"std range":<15} {"train":<5}')
 #         for i, std_range in enumerate(ranges):
 #             # for testing data, speed isn't a problem (predictions are done relatively fast)
@@ -276,16 +276,16 @@ class LSTM_Autoencoder(Detection_Model):
         X = tf.cast(X, tf.float32)
         return X
 
-    def get_std_ranges(self, X_train, number_of_models, epsilon=0.00001):
+    def get_std_ranges(self, X_train, forest_size, epsilon=0.00001):
         ''' ranges to create a forest of autoencoders '''
         std = X_train.std(axis=1)
-        #std_interval = (std.max() - std.min()) / number_of_models
+        #std_interval = (std.max() - std.min()) / forest_size
         #ranges = list(zip(
         #        np.arange(std.min(), std.max(), std_interval),
         #        np.arange(std.min() + std_interval, std.max() + epsilon, std_interval)
         #        ))
         ranges = []
-        intervals = pd.qcut( pd.DataFrame(std)[0], number_of_models, duplicates='drop').unique()
+        intervals = pd.qcut( pd.DataFrame(std)[0], forest_size, duplicates='drop').unique()
         for interval in intervals:
             ranges.append((
                 interval.left, 
@@ -305,17 +305,17 @@ class LSTM_Autoencoder(Detection_Model):
 
         return ranges
 
-    def train(self, df_n, window_size=20, epochs=10, number_of_models=6):
+    def train(self, df_n, n=20, epochs=10, forest_size=6):
         # keep reference to supplied window size, to use the same at testing/predicting
-        self.window_size = window_size
-        utils.print_header(f'LSTM AUTOENCODER (window_size={self.window_size}, number_of_models={number_of_models})')
+        self.window_size = n
+        utils.print_header(f'LSTM AUTOENCODER (window_size={self.window_size}, forest_size={forest_size})')
         X_train = utils.pc_df_to_sliding_windows(df_n, self.window_size, unique=True)
         self.assign_min_max_for_normalization(X_train)
-        self.std_ranges = self.get_std_ranges(X_train, number_of_models)
-        # logging.info(f'The following {number_of_models} standard deviation ranges are going to be used:')
+        self.std_ranges = self.get_std_ranges(X_train, forest_size)
+        # logging.info(f'The following {forest_size} standard deviation ranges are going to be used:')
         # for std_range in self.std_ranges:
         #     logging.info(std_range)
-        # logging.info(f'\nTraining {number_of_models} LSTM autoencoders:')
+        # logging.info(f'\nTraining {forest_size} LSTM autoencoders:')
         # logging.info(f'   {"std range":<15} {"train":<5}')
         for i, std_range in enumerate(self.std_ranges):
             # for testing data, speed isn't a problem (predictions are done relatively fast)
@@ -442,8 +442,8 @@ class LSTM_Autoencoder(Detection_Model):
     #    inverse_normal_recall = 1 - recall[0]
     #    return anomaly_recall, inverse_normal_recall
 
-#def detect(df_n, df_a, window_size=20, epochs=10, number_of_models=6):
-#    utils.print_header(f'LSTM AUTOENCODER (window_size={window_size}, number_of_models={number_of_models})')
+#def detect(df_n, df_a, window_size=20, epochs=10, forest_size=6):
+#    utils.print_header(f'LSTM AUTOENCODER (window_size={window_size}, forest_size={forest_size})')
 #
 #    # for training data duplicate windows are dropped
 #    # it greatly improves training times
@@ -462,12 +462,12 @@ class LSTM_Autoencoder(Detection_Model):
 #    std_train = X_train.std(axis=1)
 #    std_test = X_test.std(axis=1)
 #
-#    ranges = get_std_ranges(X_train, number_of_models)
-#    logging.info(f'The following {number_of_models} standard deviation ranges are going to be used:')
+#    ranges = get_std_ranges(X_train, forest_size)
+#    logging.info(f'The following {forest_size} standard deviation ranges are going to be used:')
 #    for std_range in ranges:
 #        logging.info(std_range)
 #
-#    logging.info(f'\nTraining and testing {number_of_models} LSTM autoencoders:')
+#    logging.info(f'\nTraining and testing {forest_size} LSTM autoencoders:')
 #    logging.info(f'   {"std range":<15} {"train":<5} {"test":<5}')
 #    for i, std_range in enumerate(ranges):
 #        # for testing data speed isn't a problem (predictions are done relatively fast)

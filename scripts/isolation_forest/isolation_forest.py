@@ -57,8 +57,8 @@ from detection_model import Detection_Model
 
 
 class Isolation_Forest(Detection_Model):
-    def __init__(self):
-        self.model = IsolationForest(n_estimators=100, random_state=0, warm_start=True)
+    def __init__(self, *args, **kwargs):
+        self.model = IsolationForest(n_estimators=100, random_state=0, warm_start=True, *args, **kwargs)
         self.train_n = None
 
     def train(self, df_n, n=2):

@@ -247,6 +247,9 @@ class Detection_Model(ABC):
         false_positives = em['false_positives']
         return f'anomaly_recall={anomaly_recall:.2f} ({detected_anomaly_count}/{anomaly_count}) false_positives_ratio={false_positives_ratio} ({false_positives}/{non_anomaly_count})'
 
+    @abstractmethod
+    def train(self, *args, **kwargs):
+        pass
 
     @abstractmethod
     def predict(self, df_a):

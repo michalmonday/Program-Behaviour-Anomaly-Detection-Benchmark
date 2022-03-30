@@ -147,6 +147,8 @@ from lstm_autoencoder import lstm_autoencoder
 from lstm_autoencoder.lstm_autoencoder import LSTM_Autoencoder
 from unique_transitions.unique_transitions import Unique_Transitions
 from isolation_forest.isolation_forest import Isolation_Forest
+from one_class_svm.one_class_svm import OneClass_SVM
+from local_outlier_factor.local_outlier_factor import Local_Outlier_Factor
 from detection_model import Detection_Model
 from conventional_machine_learning import conventional_machine_learning as conventional_ml
 
@@ -201,11 +203,10 @@ if __name__ == '__main__':
         logging.info('\nOVERRIDING CONFIG WITH VALUES FOR QUICK TESTING (because --quick-test was supplied)')
         logging.info('Overriden values are: sequence/window sizes, forest size, epochs.\n')
         # conf['unique_transitions']['sequence_sizes'] = '2'
-        conf['unique_transitions']['sequence_sizes'] = '15'
-        conf['lstm_autoencoder']['window_sizes'] = '3'
-        conf['lstm_autoencoder']['forest_size'] = '3'
-        conf['lstm_autoencoder']['epochs'] = '5'
+        conf['data']['window_sizes'] = '5'
         conf['data']['artificial_anomalies_offsets_count'] = '5'
+        conf['unique_transitions']['sequence_sizes'] = '15'
+        conf['lstm_autoencoder']['train_args'] = '"{"forest_size":3, "epochs":5}"'
 
     #########################################
     # Load and plot data
@@ -264,28 +265,42 @@ if __name__ == '__main__':
 
     df_results = pd.DataFrame(columns=Detection_Model.evaluation_metrics)
 
-    if conf['isolation_forest'].getboolean('active'):
-        # LSTM autoencoder
-        # window_size = conf['isolation_forest'].getint('window_size')
-        window_sizes = [int(ws) for ws in conf['isolation_forest'].get('window_sizes').strip().split(',')]
-        for window_size in window_sizes:
-            is_fo = Isolation_Forest()
-            is_fo.train(df_n, n=window_size)
+    anomaly_detection_models = {
+            # keys correspond to config file section names
+            # values are classes (that inherit from Detection_Model class,
+            #                     and must implement "train" and "predict", 
+            #                     Detection_Model has a common evaluate_all method)
+            'unique_transitions'   : Unique_Transitions,
+            'isolation_forest'     : Isolation_Forest,
+            'one_class_svm'        : OneClass_SVM,
+            'local_outlier_factor' : Local_Outlier_Factor,
+            'lstm_autoencoder'     : LSTM_Autoencoder
+            }
 
-            # results_lstm is a list of tuples where each tuple has:
-            # - is_anomaly (bool)
-            # - results_df (df with columns: loss, threshold, anomaly, window_start, window_end)
-            # - anomalies_df (just like results_df but only containing rows for anomalous windows)
-            results_isfo = is_fo.predict_all(df_a)
+    window_sizes = [int(ws) for ws in conf['data'].get('window_sizes').strip().split(',')]
+    for name, model_class in anomaly_detection_models.items():
+        if not conf[name]['active']:
+            logging.info(f'Omitting "{name}" method because config has active=False')
+            continue
+
+        for window_size in window_sizes:
             df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
                     df_a_ground_truth,
                     window_size 
                     )
-            not_detected, em = is_fo.evaluate_all_2(results_isfo, df_a_ground_truth_windowized)
-            logging.info( is_fo.format_evaluation_metrics(em) )
-            # logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
-            # logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')
-            method_name = f'Isolation forest (window_size={window_size})'
+            constructor_args = {}
+            if 'constructor_args' in conf[name]:
+                constructor_args = json.loads( conf[name].get('constructor_args').strip()[1:-1] )
+            train_args = {}
+            if 'train_args' in conf[name]:
+                train_args = json.loads( conf[name].get('train_args').strip()[1:-1] )
+
+            model = model_class(**constructor_args)
+            model.train(df_n, n=window_size, **train_args)
+            results = model.predict_all(df_a)
+            not_detected, em = model.evaluate_all_2(results, df_a_ground_truth_windowized)
+            logging.info( model.format_evaluation_metrics(em) )
+            method_name = f'{name} (window_size={window_size})'
             df_results.loc[method_name] = em
 
             if not not_detected.empty:
@@ -293,11 +308,11 @@ if __name__ == '__main__':
                 utils.save_figure(fig, method_name, images_dir)
 
     if conf['conventional_machine_learning'].getboolean('active'):
-        window_sizes = [int(ws) for ws in conf['conventional_machine_learning'].get('window_sizes').strip().split(',')]
         for window_size in window_sizes:
             normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True)
             abnormal_windows = utils.pc_df_to_sliding_windows(df_a, window_size=window_size, unique=True)
-            # remove normal_windows from abnormal_windows
+            # Remove normal_windows from abnormal_windows because programs with abnormalities contain normal windows as well,
+            # unless we remove them just like it's done here.
             abnormal_windows = abnormal_windows.merge(normal_windows, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
 
             normal_windows['label'] = 0
@@ -341,69 +356,6 @@ if __name__ == '__main__':
                 y_pred = model.predict(X_test)
                 evaluation_metrics = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
                 df_results.loc[name] = evaluation_metrics
-
-    if conf['unique_transitions'].getboolean('active'):
-        # Unique transitions
-        sequence_sizes = [int(seq_size) for seq_size in conf['unique_transitions'].get('sequence_sizes').strip().split(',')]
-        for seq_size in sequence_sizes:
-            ut = Unique_Transitions()
-
-            ut.train(df_n, n=seq_size)
-
-            # results_ua is a list of boolean lists for each file
-            # where True=anomaly, False=normal
-            results_ut = ut.predict_all(df_a)
-            df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
-                    df_a_ground_truth,
-                    seq_size # window/sequence size
-                    )
-            # df_a_ground_truth_windowized = df_a_ground_truth
-
-            # anomaly_recall = what percent of anomalies will get detected
-            # false_positives_ratio = what percent of normal program behaviour 
-            #                         will be classified as anomalous, which is 
-            #                         referred to as "false positives" in other
-            #                         papers (about anomaly detection)
-            not_detected, em = ut.evaluate_all_2(results_ut, df_a_ground_truth_windowized)
-            # print(not_detected)
-            # exit()
-            logging.info( ut.format_evaluation_metrics(em) )
-
-            method_name = f'unique_transitions (seq_size={seq_size})'
-            df_results.loc[method_name] = em
-
-            if not not_detected.empty:
-                fig, axs = utils.plot_undetected_regions(not_detected, df_a, pre_anomaly_values, anomalies_ranges, title=f'Undetected anomalies - {method_name}')
-                utils.save_figure(fig, method_name, images_dir)
-
-
-    if conf['lstm_autoencoder'].getboolean('active'):
-        # LSTM autoencoder
-        # window_size = conf['lstm_autoencoder'].getint('window_size')
-        window_sizes = [int(ws) for ws in conf['lstm_autoencoder'].get('window_sizes').strip().split(',')]
-        for window_size in window_sizes:
-            la = LSTM_Autoencoder()
-            la.train(df_n, window_size=window_size, epochs=conf['lstm_autoencoder'].getint('epochs'), number_of_models=conf['lstm_autoencoder'].getint('forest_size'))
-
-            # results_lstm is a list of tuples where each tuple has:
-            # - is_anomaly (bool)
-            # - results_df (df with columns: loss, threshold, anomaly, window_start, window_end)
-            # - anomalies_df (just like results_df but only containing rows for anomalous windows)
-            results_lstm = la.predict_all(df_a)
-            df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
-                    df_a_ground_truth,
-                    window_size 
-                    )
-            not_detected, em = la.evaluate_all_2(results_lstm, df_a_ground_truth_windowized)
-            logging.info( la.format_evaluation_metrics(em) )
-            # logging.info(f'LSTM autoencoder accuracy: {accuracy_lstm:.2f}')
-            # logging.info(f'LSTM autoencoder false positives: {false_positives_lstm:.2f}')
-            method_name = f'lstm autoencoder (window_size={window_size})'
-            df_results.loc[method_name] = em
-
-            if not not_detected.empty:
-                fig, axs = utils.plot_undetected_regions(not_detected, df_a, pre_anomaly_values, anomalies_ranges, title=f'Undetected anomalies - {method_name}')
-                utils.save_figure(fig, method_name, images_dir)
 
 
     axs = df_results[['anomaly_recall', 'false_positives_ratio']].plot.bar(rot=15, subplots=True)
