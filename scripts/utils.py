@@ -396,9 +396,9 @@ def get_anomaly_identifier_mask(df_gt):
 def generate_artificial_anomalies(df_n, offsets_count, anomaly_methods=[], reduce_loops=True, min_iteration_size=50):
     if not anomaly_methods:
         anomaly_methods = [
-            Artificial_Anomalies.randomize_section,
-            Artificial_Anomalies.slightly_randomize_section,
-            Artificial_Anomalies.minimal
+            Artificial_Anomalies.randomize_section
+            # Artificial_Anomalies.slightly_randomize_section,
+            # Artificial_Anomalies.minimal
             ]
     anomalies_ranges = []
     pre_anomaly_values = []
@@ -507,6 +507,8 @@ def store_csvs_for_external_testing(df_n, df_a, df_a_ground_truth):
     df_a_ground_truth_single.to_csv('df_a_ground_truth_single.csv', **to_csv_kwargs)
     df_a_ground_truth_single.plot(ax=axs[2])
 
+def dict_to_kwargs_str(d):
+    return ', '.join([f'{k}={v}' for k,v in d.items()])
 
 
 if __name__ == '__main__':

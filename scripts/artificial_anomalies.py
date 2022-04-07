@@ -238,8 +238,9 @@ class Artificial_Anomalies:
 
     @staticmethod
     def generate_random_section_size(col):
-        max_size = min(10, col.shape[0]-2)
-        return random.randint(2, max_size)
+        min_size = 10
+        max_size = min(50, col.shape[0]-2)
+        return random.randint(min_size, max_size)
 
     # @staticmethod
     # def fixed_reduce_loops(col):
