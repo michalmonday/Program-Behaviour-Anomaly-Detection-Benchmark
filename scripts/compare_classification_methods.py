@@ -139,6 +139,7 @@ import json
 from copy import deepcopy
 from math import ceil, floor, sqrt
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
+import time
 
 import utils
 from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files, plot_vspans, plot_vspans_ranges, print_config
@@ -212,18 +213,22 @@ if __name__ == '__main__':
     # Load and plot data
 
     # Load function_ranges (used just for plotting)
+    logging.info('Reading function ranges.')
     function_ranges = json.load(args.function_ranges) if args.function_ranges else {}
     # Load program counter values from files
+    logging.info('Reading and preprocessing normal pc files.')
     df_n = df_from_pc_files(
             args.normal_pc, 
             column_prefix    = 'normal: ',
             relative_pc      = conf['data'].getboolean('relative_pc'),
             ignore_non_jumps = conf['data'].getboolean('ignore_non_jumps')
             )
+    logging.info(f'Number of normal pc files: {df_n.shape[1]}')
 
     anomalies_ranges = []
     pre_anomaly_values = []
     if args.abnormal_pc:
+        logging.info('Reading and preprocessing abnormal pc files.')
         df_a = df_from_pc_files(
                 args.abnormal_pc,
                 column_prefix    = 'abnormal: ',
@@ -232,12 +237,15 @@ if __name__ == '__main__':
                 load_address     = conf['data'].getint('abnormal_load_address')
                 )
     else:
-        df_a, df_a_ground_truth, anomalies_ranges, pre_anomaly_values = utils.generate_artificial_anomalies(
+        logging.info('Generating artificial anomalies.')
+        df_a, df_a_ground_truth, anomalies_ranges, pre_anomaly_values = Artificial_Anomalies.generate(
                 df_n,
                 conf['data'].getint('artificial_anomalies_offsets_count'),
                 reduce_loops = True,
                 min_iteration_size = conf['data'].getint('artificial_anomalies_reduce_loops_min_iteration_size')
                 )
+
+    logging.info(f'Number of abnormal pc files: {df_a.shape[1]}')
 
     # df_a.iloc[:,-1].dropna().plot()
     # plt.plot(df_a_ground_truth.iloc[:,-1].dropna().values * df_a.iloc[:,-1].max())
@@ -248,12 +256,13 @@ if __name__ == '__main__':
     # plot_data(pd.DataFrame(), df_a.iloc[:,-2:], anomalies_ranges=anomalies_ranges[-2:])
     # plot_data(pd.DataFrame(), df_a.iloc[:,-2:], anomalies_ranges=anomalies_ranges[-2:], pre_anomaly_values=pre_anomaly_values[-2:])
 
-    logging.info(f'Number of normal pc files: {df_n.shape[1]}')
-    logging.info(f'Number of abnormal pc files: {df_a.shape[1]}')
 
-    utils.store_csvs_for_external_testing(df_n, df_a, df_a_ground_truth)
+    if conf['output'].getboolean('store_csvs_for_external_testing'):
+        logging.info('Storing csvs for external testing')
+        utils.store_csvs_for_external_testing(df_n, df_a, df_a_ground_truth, plot=conf['output'].getboolean('plot_csvs'))
 
     if args.plot_data:
+        logging.info('Plotting pc data.')
         plot_data(
                 df_n,
                 df_a,
@@ -263,7 +272,11 @@ if __name__ == '__main__':
                 )
         plt.show()
 
-    df_results = pd.DataFrame(columns=Detection_Model.evaluation_metrics)
+    # df_results = pd.DataFrame(columns=Detection_Model.evaluation_metrics)
+
+    # anomaly_detection_models = {
+    #         'unique_transitions'   : (Unique_Transitions, {})
+    #         }
 
     anomaly_detection_models = {
             # keys correspond to config file section names
@@ -271,23 +284,25 @@ if __name__ == '__main__':
             #                     and must implement "train" and "predict", 
             #                     Detection_Model has a common evaluate_all method)
             'unique_transitions'   : (Unique_Transitions, {}),
-            'isolation_forest'     : (Isolation_Forest, {'contamination':0.01}),
+            'isolation_forest'     : (Isolation_Forest, {'contamination':0.001}),
             'one_class_svm'        : (OneClass_SVM, {'nu':0.1}),
-            'one_class_svm'        : (OneClass_SVM, {'nu':0.06}),
-            'one_class_svm'        : (OneClass_SVM, {'nu':0.03}),
-            'one_class_svm'        : (OneClass_SVM, {'kernel': 'linear'}),
-            'one_class_svm'        : (OneClass_SVM, {'kernel': 'poly'}),
-            'one_class_svm'        : (OneClass_SVM, {'kernel': 'rbf'}),
+            # 'one_class_svm'        : (OneClass_SVM, {'nu':0.06}),
+            # 'one_class_svm'        : (OneClass_SVM, {'nu':0.03}),
+            # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'linear'}),
+            # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'poly'}),
+            # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'rbf'}),
             'one_class_svm'        : (OneClass_SVM, {'kernel': 'sigmoid'}),
-            'local_outlier_factor' : (Local_Outlier_Factor, {'contamination':0.01}),
-            'lstm_autoencoder'     : (LSTM_Autoencoder, {})
+            'local_outlier_factor' : (Local_Outlier_Factor, {'contamination':0.001})#,
+            # 'lstm_autoencoder'     : (LSTM_Autoencoder, {})
             }
 
     window_sizes = [int(ws) for ws in conf['data'].get('window_sizes').strip().split(',')]
+    df_results_all = {ws:pd.DataFrame(columns=Detection_Model.evaluation_metrics) for ws in window_sizes}
+    df_results_all_merged = pd.DataFrame(columns=Detection_Model.evaluation_metrics)
     for name, (model_class, constructor_kwargs) in anomaly_detection_models.items():
-        if not conf[name]['active']:
-            logging.info(f'Omitting "{name}" method because config has active=False')
-            continue
+        # if not conf[name]['active']:
+        #     logging.info(f'Omitting "{name}" method because config has active=False')
+        #     continue
 
         for window_size in window_sizes:
             df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
@@ -301,16 +316,37 @@ if __name__ == '__main__':
             if 'train_args' in conf[name]:
                 train_args = json.loads( conf[name].get('train_args').strip()[1:-1] )
 
-            model = model_class(**constructor_kwargs)
-            model.train(df_n, n=window_size, **train_args)
-            results = model.predict_all(df_a)
-            not_detected, em = model.evaluate_all_2(results, df_a_ground_truth_windowized)
-            logging.info( model.format_evaluation_metrics(em) )
             kwargs_str = utils.dict_to_kwargs_str(constructor_kwargs)
             method_name = f'{name} (window_size={window_size}, {kwargs_str})'
-            df_results.loc[method_name] = em
 
-            if not not_detected.empty:
+            utils.print_header(method_name)
+
+            # instantiation
+            model = model_class(**constructor_kwargs)
+
+            # training
+            logging.info('Training...')
+            start_time = time.time() 
+            model.train(df_n, n=window_size, **train_args)
+            training_time = (time.time() - start_time)*1000
+            logging.info(f'Training took {training_time:.0f}ms')
+
+            # testing
+            logging.info('Testing...')
+            start_time = time.time()
+            results = model.predict_all(df_a)
+            testing_time = (time.time() - start_time)*1000
+            logging.info(f'Testing took {testing_time:.0f}ms')
+
+            # evaluation
+            not_detected, em = model.evaluate_all_2(results, df_a_ground_truth_windowized)
+            logging.info( model.format_evaluation_metrics(em) )
+            em['training_time_ms'] = int(training_time)
+            em['testing_time_ms'] = int(testing_time)
+            df_results_all[window_size].loc[method_name] = em
+            df_results_all_merged.loc[method_name] = em
+
+            if not not_detected.empty and conf['output'].getboolean('plot_not_detected_anomalies'):
                 fig, axs = utils.plot_undetected_regions(not_detected, df_a, pre_anomaly_values, anomalies_ranges, title=f'Undetected anomalies - {method_name}')
                 utils.save_figure(fig, method_name, images_dir)
 
@@ -365,7 +401,16 @@ if __name__ == '__main__':
 #                 df_results.loc[name] = evaluation_metrics
 
 
-    axs = df_results[['anomaly_recall', 'false_positives_ratio']].plot.bar(rot=15, subplots=True)
+    # separate figure for each window size
+    for window_size, df_results in df_results_all.items():
+        axs = df_results[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results (window_size={window_size})')
+        for ax in axs:
+            for container in ax.containers:
+                # set numerical label on top of bar/rectangle
+                ax.bar_label(container)
+
+    # single figure containing window sizes
+    axs = df_results_all_merged[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results all window sizes')
     for ax in axs:
         for container in ax.containers:
             # set numerical label on top of bar/rectangle

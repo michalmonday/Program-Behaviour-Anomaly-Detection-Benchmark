@@ -308,7 +308,7 @@ class LSTM_Autoencoder(Detection_Model):
     def train(self, df_n, n=20, epochs=10, forest_size=6):
         # keep reference to supplied window size, to use the same at testing/predicting
         self.window_size = n
-        utils.print_header(f'LSTM AUTOENCODER (window_size={self.window_size}, forest_size={forest_size})')
+        # utils.print_header(f'LSTM AUTOENCODER (window_size={self.window_size}, forest_size={forest_size})')
         X_train = utils.pc_df_to_sliding_windows(df_n, self.window_size, unique=True)
         self.assign_min_max_for_normalization(X_train)
         self.std_ranges = self.get_std_ranges(X_train, forest_size)

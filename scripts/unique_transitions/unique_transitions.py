@@ -79,12 +79,12 @@ class Unique_Transitions(Detection_Model):
         self.train_n = None
 
     def train(self, df_n, n=2):
-        utils.print_header(f'UNIQUE TRANSITIONS (n={n})')
+        # utils.print_header(f'UNIQUE TRANSITIONS (n={n})')
         self.normal_ut = utils.pc_df_to_sliding_windows(df_n, window_size=n, unique=True)
         self.train_n = n
 
-        logging.info(f'Number of train programs: {df_n.shape[1]}')
-        logging.info(f'Longest train program size: {df_n.shape[0]} instructions')
+        # logging.info(f'Number of train programs: {df_n.shape[1]}')
+        # logging.info(f'Longest train program size: {df_n.shape[0]} instructions')
         logging.info(f'Number of unique train sequences (with size of {n}): {self.normal_ut.shape[0]}')
 
     def predict(self, df_a_col):

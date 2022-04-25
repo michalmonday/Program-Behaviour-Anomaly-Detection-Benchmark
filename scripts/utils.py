@@ -8,8 +8,6 @@ import re
 import os
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 
-from artificial_anomalies import Artificial_Anomalies
-
 TITLE_SIZE = 20
 
 def hexify_y_axis(ax):
@@ -25,17 +23,23 @@ def read_pc_values(f_name, relative_pc=False, ignore_non_jumps=False, load_addre
     # IGNORE_NON_JUMP AND RELATIVE_PC OPTIONS COMBINED TOGETHER CREATE 
     # THE QUESTION: SHOULD RELATIVE PC BE RELATIVE TO ANY LAST PC OR THE LAST 
     # NON-JUMP PC
-    if ignore_non_jumps:
-        # [0] is inserted at the begining of relative pcs so the length matches
-        rel_pcs = [0] + relative_from_absolute_pc(pcs)
-        if relative_pc:
-            return [rel_pc for rel_pc in rel_pcs if abs(int(rel_pc)) > 4]
-        else:
-            return [pc for pc,rel_pc in zip(pcs, rel_pcs) if abs(int(rel_pc)) > 4]
-        # rel_pcs = [0] + relative_from_absolute_pc(pcs)
-        # return [pc for pc,rel_pc in zip(pcs, rel_pcs) if abs(int(rel_pc)) > 4]
     if relative_pc:
         pcs = relative_from_absolute_pc(pcs)
+
+    if ignore_non_jumps:
+        threshold = 4
+        # [0] is inserted at the begining of relative pcs so the length matches
+        rel_pcs = [0] + relative_from_absolute_pc(pcs)
+        indices_to_keep = set()
+        for i, rel_pc in enumerate(rel_pcs[:-1]):
+            if abs(int(rel_pc)) > threshold:
+                indices_to_keep.add(i)
+            if abs(int(rel_pcs[i+1])) > threshold:
+                indices_to_keep.add(i)
+                indices_to_keep.add(i+1)
+        return [pcs[i] for i in sorted(indices_to_keep)]
+        # rel_pcs = [0] + relative_from_absolute_pc(pcs)
+        # return [pc for pc,rel_pc in zip(pcs, rel_pcs) if abs(int(rel_pc)) > 4]
     return pcs
 
 def df_from_pc_files(f_list, column_prefix='', relative_pc=False, ignore_non_jumps=False, load_address=0):
@@ -393,71 +397,6 @@ def get_anomaly_identifier_mask(df_gt):
         return col_copy
     return df_gt.apply(f)
 
-def generate_artificial_anomalies(df_n, offsets_count, anomaly_methods=[], reduce_loops=True, min_iteration_size=50):
-    if not anomaly_methods:
-        anomaly_methods = [
-            Artificial_Anomalies.randomize_section
-            # Artificial_Anomalies.slightly_randomize_section,
-            # Artificial_Anomalies.minimal
-            ]
-    anomalies_ranges = []
-    pre_anomaly_values = []
-    df_a = pd.DataFrame()
-    df_a_ground_truth = pd.DataFrame(dtype=bool)
-    # Introduce artificial anomalies for all the files, resulting in the following testing examples:
-    # - method 1 with file 1
-    # - method 1 with file 2
-    # - method 2 with file 1
-    # - method 2 with file 2
-    # - method 3 with file 1
-    # - method 3 with file 2
-    # 
-    # Where "method" is a one of the methods from "Artificial_Anomalies" class (e.g. randomize_section, slightly_randomize_section, minimal)
-    # and where "file" is a normal/baseline file containing program counters.
-    # Example above shows only 3 methods and 2 files, but the principle applies for any number.
-    # So with 5 methods and 5 normal pc files there would be 25 testing examples.
-
-    for i, method in enumerate(anomaly_methods):
-        # for each normal/baseline append column with introduced anomalies into into "df_a"
-        for j, column_name in enumerate(df_n):
-            for k in range(offsets_count):
-                # introduce anomalies
-                col_a, ar, pav, col_a_ground_truth = method(df_n[column_name].copy())
-                # keep record of anomalies and previous values (for plotting later)
-                anomalies_ranges.append(ar)
-                pre_anomaly_values.append(pav)
-                # rename column
-                new_column_name = column_name.replace('normal', f'{method.__name__}_({i},{j},{k})', 1)
-                df_a[new_column_name] = col_a
-                df_a_ground_truth[new_column_name] = col_a_ground_truth
-
-    # REDUCE LOOPS
-    # Reducing loops can't be very randomized so it's done after all other 
-    # anomalies are introduced (where program counter values are randomized).
-    for j, column_name in enumerate(df_n):
-        new_column_name = column_name.replace('normal', f'reduced_loops', 1)
-        col, first_iteration_ranges, reduced_ranges, col_a_ground_truth = Artificial_Anomalies.reduce_loops(
-                df_n[column_name],
-                min_iteration_size=min_iteration_size
-                )
-        new_column = pd.Series([np.NaN]*df_n.shape[0])
-        new_column[0:col.shape[0]] = col
-        # logging.info(f'new_column: {new_column}')
-        # pav = pd.Series()
-        df_a[new_column_name] = new_column
-        df_a_ground_truth[new_column_name] = col_a_ground_truth
-        pav = []
-        # TODO: append original values based on "col.probably_loc[reduced_range] for reduced_range in reduced_ranges"
-        for r in sorted(reduced_ranges):
-            # pav = pav.combine(col.loc[r[0]:r[1]], max, fill_value=-1)
-            pav.append(df_n[column_name].loc[r[0]:r[1]].copy())
-        # specific_values=[True] will return anomaly ranges only
-        ar = get_same_consecutive_values_ranges(col_a_ground_truth, specific_values=[True])
-        pre_anomaly_values.append(pav)
-        anomalies_ranges.append(ar)
-
-    return df_a, df_a_ground_truth, anomalies_ranges, pre_anomaly_values
-
 def dfs_to_XY(dfs):
     df = pd.concat(dfs)
     df = df.sample(frac=1) # shuffle
@@ -486,7 +425,7 @@ def labels_to_evaluation_metrics(y_test, y_pred):
             }
     return evaluation_metrics
 
-def store_csvs_for_external_testing(df_n, df_a, df_a_ground_truth):
+def store_csvs_for_external_testing(df_n, df_a, df_a_ground_truth, plot=False):
     to_csv_kwargs = {
             'index':False,
             # 'header':False
@@ -496,15 +435,18 @@ def store_csvs_for_external_testing(df_n, df_a, df_a_ground_truth):
     df_a.to_csv('df_a.csv', **to_csv_kwargs)
     (df_a_ground_truth*1).to_csv('df_a_ground_truth.csv', **to_csv_kwargs) # *1 converts bool to int with preserving NaN
 
-    fig, axs = plt.subplots(3)
     df_n_single = df_n.melt(value_name='df_n_single').drop('variable', axis=1).dropna().reset_index(drop=True)
     df_n_single.to_csv('df_n_single.csv', **to_csv_kwargs)
-    df_n_single.plot(ax=axs[0])
     df_a_single = df_a.melt(value_name='df_a_single').drop('variable', axis=1).dropna().reset_index(drop=True)
     df_a_single.to_csv('df_a_single.csv', **to_csv_kwargs)
-    df_a_single.plot(ax = axs[1])
     df_a_ground_truth_single = (df_a_ground_truth*1).melt(value_name='df_a_ground_truth_single').drop('variable', axis=1).dropna().reset_index(drop=True)
     df_a_ground_truth_single.to_csv('df_a_ground_truth_single.csv', **to_csv_kwargs)
+
+    if not plot:
+        return
+    fig, axs = plt.subplots(3)
+    df_n_single.plot(ax=axs[0])
+    df_a_single.plot(ax = axs[1])
     df_a_ground_truth_single.plot(ax=axs[2])
 
 def dict_to_kwargs_str(d):
@@ -513,5 +455,14 @@ def dict_to_kwargs_str(d):
 
 if __name__ == '__main__':
     print( sanitize_fname('abc.,(-):123') )
+
+    fname = '../log_files/stack-mission_riscv64_normal.pc'
+    pcs = read_pc_values(fname, ignore_non_jumps=False)
+    pcs2 = read_pc_values(fname, ignore_non_jumps=True)
+    plt.plot(pcs, marker="*")
+    plt.plot(pcs2, marker="*")
+    plt.show()
+
+
 
 

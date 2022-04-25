@@ -13,7 +13,9 @@ from abc import ABC, abstractmethod
 class Detection_Model(ABC):
     evaluation_metrics = [
         'anomaly_recall', 'false_positives_ratio', 'anomaly_count', 
-        'detected_anomaly_count', 'non_anomaly_count', 'false_positives'
+        'detected_anomaly_count', 'non_anomaly_count', 'false_positives',
+        
+        'training_time_ms', 'testing_time_ms'
             ]
     
     def __init__(self):
@@ -199,7 +201,11 @@ class Detection_Model(ABC):
         all_anomalies = reduce(lambda s, s2: s|s2, melted_ground_truth.value.values)
 
         # get all detected anomaly ids (even if they were detected in 1 window despite being able to be detected in many)
-        detected_anomalies = reduce(lambda s, s2: s|s2, melted_ground_truth[all_detection_results].value.values)
+        try:
+            detected_anomalies = reduce(lambda s, s2: s|s2, melted_ground_truth[all_detection_results].value.values)
+        except TypeError:
+            # TypeError happens when iterable supplied to "reduce" is empty 
+            detected_anomalies = set()
         
         # set below is mainly for printing not detected anomaly counts
         # not_detected_anomalies_set = all_anomalies - detected_anomalies

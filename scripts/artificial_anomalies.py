@@ -156,8 +156,8 @@ class Artificial_Anomalies:
 
                 not_null_labels = gt[start:end][gt.notnull()]
                 if not_null_labels.shape[0] > 0:
-                    print(f'{not_null_labels.shape[0]} not null labels will be dropped')
-                    print(not_null_labels)
+                    logging.debug(f'{not_null_labels.shape[0]} not null labels will be dropped')
+                    logging.debug(not_null_labels)
                 gt.drop(gt[start:end].index, inplace=True)
                 # logging.info(f'len(reduced_rows)={len(reduced_rows):<3} len(all_reduced_rows)={len(all_reduced_rows):<3} start={start:<3} end={end:<3} iteration_size={iteration_size:<3} col.shape[0]={col.shape[0]} orig_size_not_null={orig_size_not_null} discrepancy={orig_size_not_null - col[col.notnull()].shape[0] - len(all_reduced_rows)}')
             
@@ -260,6 +260,73 @@ class Artificial_Anomalies:
             if range(max(r[0], r2[0]), min(r[-1], r2[-1])+1):
                 return True
         return False
+
+
+    @staticmethod
+    def generate(df_n, offsets_count, anomaly_methods=[], reduce_loops=True, min_iteration_size=50):
+        if not anomaly_methods:
+            anomaly_methods = [
+                __class__.randomize_section
+                # Artificial_Anomalies.slightly_randomize_section,
+                # Artificial_Anomalies.minimal
+                ]
+        anomalies_ranges = []
+        pre_anomaly_values = []
+        df_a = pd.DataFrame()
+        df_a_ground_truth = pd.DataFrame(dtype=bool)
+        # Introduce artificial anomalies for all the files, resulting in the following testing examples:
+        # - method 1 with file 1
+        # - method 1 with file 2
+        # - method 2 with file 1
+        # - method 2 with file 2
+        # - method 3 with file 1
+        # - method 3 with file 2
+        # 
+        # Where "method" is a one of the methods from "Artificial_Anomalies" class (e.g. randomize_section, slightly_randomize_section, minimal)
+        # and where "file" is a normal/baseline file containing program counters.
+        # Example above shows only 3 methods and 2 files, but the principle applies for any number.
+        # So with 5 methods and 5 normal pc files there would be 25 testing examples.
+
+        for i, method in enumerate(anomaly_methods):
+            # for each normal/baseline append column with introduced anomalies into into "df_a"
+            for j, column_name in enumerate(df_n):
+                for k in range(offsets_count):
+                    # introduce anomalies
+                    col_a, ar, pav, col_a_ground_truth = method(df_n[column_name].copy())
+                    # keep record of anomalies and previous values (for plotting later)
+                    anomalies_ranges.append(ar)
+                    pre_anomaly_values.append(pav)
+                    # rename column
+                    new_column_name = column_name.replace('normal', f'{method.__name__}_({i},{j},{k})', 1)
+                    df_a[new_column_name] = col_a
+                    df_a_ground_truth[new_column_name] = col_a_ground_truth
+
+        # REDUCE LOOPS
+        # Reducing loops can't be very randomized so it's done after all other 
+        # anomalies are introduced (where program counter values are randomized).
+        for j, column_name in enumerate(df_n):
+            new_column_name = column_name.replace('normal', f'reduced_loops', 1)
+            col, first_iteration_ranges, reduced_ranges, col_a_ground_truth = __class__.reduce_loops(
+                    df_n[column_name],
+                    min_iteration_size=min_iteration_size
+                    )
+            new_column = pd.Series([np.NaN]*df_n.shape[0])
+            new_column[0:col.shape[0]] = col
+            # logging.info(f'new_column: {new_column}')
+            # pav = pd.Series()
+            df_a[new_column_name] = new_column
+            df_a_ground_truth[new_column_name] = col_a_ground_truth
+            pav = []
+            # TODO: append original values based on "col.probably_loc[reduced_range] for reduced_range in reduced_ranges"
+            for r in sorted(reduced_ranges):
+                # pav = pav.combine(col.loc[r[0]:r[1]], max, fill_value=-1)
+                pav.append(df_n[column_name].loc[r[0]:r[1]].copy())
+            # specific_values=[True] will return anomaly ranges only
+            ar = utils.get_same_consecutive_values_ranges(col_a_ground_truth, specific_values=[True])
+            pre_anomaly_values.append(pav)
+            anomalies_ranges.append(ar)
+
+        return df_a, df_a_ground_truth, anomalies_ranges, pre_anomaly_values
 
 # Testing code
 if __name__ == '__main__':
