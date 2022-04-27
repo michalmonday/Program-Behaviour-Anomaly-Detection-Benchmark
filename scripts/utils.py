@@ -405,8 +405,12 @@ def dfs_to_XY(dfs):
     return X,y
 
 def labels_to_evaluation_metrics(y_test, y_pred):
-    precision, recall, fscore, support = precision_recall_fscore_support(y_test, y_pred, zero_division=0)
-    tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+    precision, recall, fscore, support = precision_recall_fscore_support(y_test, y_pred, labels=[False, True], zero_division=0)
+    try:
+        tn, fp, fn, tp = confusion_matrix(y_test, y_pred, labels=[False, True]).ravel()
+    except ValueError as e:
+        logging.error(e)
+        import pdb; pdb.set_trace()
     evaluation_metrics = {
         ####################################################
         # 2 MAIN evaluation metrics

@@ -152,6 +152,7 @@ from one_class_svm.one_class_svm import OneClass_SVM
 from local_outlier_factor.local_outlier_factor import Local_Outlier_Factor
 from detection_model import Detection_Model
 from conventional_machine_learning import conventional_machine_learning as conventional_ml
+from cnn import cnn
 
 import logging
 logging.basicConfig(format='%(message)s', level=logging.INFO)
@@ -223,6 +224,7 @@ if __name__ == '__main__':
             relative_pc      = conf['data'].getboolean('relative_pc'),
             ignore_non_jumps = conf['data'].getboolean('ignore_non_jumps')
             )
+
     logging.info(f'Number of normal pc files: {df_n.shape[1]}')
 
     anomalies_ranges = []
@@ -244,6 +246,17 @@ if __name__ == '__main__':
                 reduce_loops = True,
                 min_iteration_size = conf['data'].getint('artificial_anomalies_reduce_loops_min_iteration_size')
                 )
+
+    if conf['data'].getint('artificial_normal_files_count') > 0:
+        logging.info('Appending artificial normal files.')
+        df_n_artificial, _, _, _ = Artificial_Anomalies.generate(
+                    df_n,
+                    conf['data'].getint('artificial_normal_files_count'),
+                    reduce_loops = True,
+                    min_iteration_size = conf['data'].getint('artificial_normal_reduce_loops_min_iteration_size')
+                    )
+        df_n = df_n.join(df_n_artificial)
+        logging.info(f'Number of normal pc files: {df_n.shape[1]} (added {df_n_artificial.shape[1]} artificial files)')
 
     logging.info(f'Number of abnormal pc files: {df_a.shape[1]}')
 
@@ -278,23 +291,24 @@ if __name__ == '__main__':
     #         'unique_transitions'   : (Unique_Transitions, {})
     #         }
 
-    anomaly_detection_models = {
-            # keys correspond to config file section names
-            # values are classes (that inherit from Detection_Model class,
-            #                     and must implement "train" and "predict", 
-            #                     Detection_Model has a common evaluate_all method)
-            'unique_transitions'   : (Unique_Transitions, {}),
-            'isolation_forest'     : (Isolation_Forest, {'contamination':0.001}),
-            'one_class_svm'        : (OneClass_SVM, {'nu':0.1}),
-            # 'one_class_svm'        : (OneClass_SVM, {'nu':0.06}),
-            # 'one_class_svm'        : (OneClass_SVM, {'nu':0.03}),
-            # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'linear'}),
-            # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'poly'}),
-            # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'rbf'}),
-            'one_class_svm'        : (OneClass_SVM, {'kernel': 'sigmoid'}),
-            'local_outlier_factor' : (Local_Outlier_Factor, {'contamination':0.001})#,
-            # 'lstm_autoencoder'     : (LSTM_Autoencoder, {})
-            }
+    # anomaly_detection_models = {
+    #         # keys correspond to config file section names
+    #         # values are classes (that inherit from Detection_Model class,
+    #         #                     and must implement "train" and "predict", 
+    #         #                     Detection_Model has a common evaluate_all method)
+    #         'unique_transitions'   : (Unique_Transitions, {}),
+    #         'isolation_forest'     : (Isolation_Forest, {'contamination':0.001}),
+    #         'one_class_svm'        : (OneClass_SVM, {'nu':0.1}),
+    #         # 'one_class_svm'        : (OneClass_SVM, {'nu':0.06}),
+    #         # 'one_class_svm'        : (OneClass_SVM, {'nu':0.03}),
+    #         # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'linear'}),
+    #         # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'poly'}),
+    #         # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'rbf'}),
+    #         'one_class_svm'        : (OneClass_SVM, {'kernel': 'sigmoid'}),
+    #         'local_outlier_factor' : (Local_Outlier_Factor, {'contamination':0.001})#,
+    #         # 'lstm_autoencoder'     : (LSTM_Autoencoder, {})
+    #         }
+    anomaly_detection_models = {}
 
     window_sizes = [int(ws) for ws in conf['data'].get('window_sizes').strip().split(',')]
     df_results_all = {ws:pd.DataFrame(columns=Detection_Model.evaluation_metrics) for ws in window_sizes}
@@ -350,71 +364,126 @@ if __name__ == '__main__':
                 fig, axs = utils.plot_undetected_regions(not_detected, df_a, pre_anomaly_values, anomalies_ranges, title=f'Undetected anomalies - {method_name}')
                 utils.save_figure(fig, method_name, images_dir)
 
-#     if conf['conventional_machine_learning'].getboolean('active'):
-#         for window_size in window_sizes:
-#             normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True)
-#             abnormal_windows = utils.pc_df_to_sliding_windows(df_a, window_size=window_size, unique=True)
-#             # Remove normal_windows from abnormal_windows because programs with abnormalities contain normal windows as well,
-#             # unless we remove them just like it's done here.
-#             abnormal_windows = abnormal_windows.merge(normal_windows, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
+    # if conf['conventional_machine_learning'].getboolean('active'):
+    #     for window_size in window_sizes:
+    #         normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True)
+    #         abnormal_windows = utils.pc_df_to_sliding_windows(df_a, window_size=window_size, unique=True)
+    #         # Remove normal_windows from abnormal_windows because programs with abnormalities contain normal windows as well,
+    #         # unless we remove them just like it's done here.
+    #         abnormal_windows = abnormal_windows.merge(normal_windows, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
 
-#             normal_windows['label'] = 0
-#             abnormal_windows['label'] = 1
+    #         normal_windows['label'] = 0
+    #         abnormal_windows['label'] = 1
 
-#             # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(0.5 * abnormal_windows.shape[0])])
-#             abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [normal_windows.shape[0]])
-#             logging.info(f'normal_windows count = {normal_windows.shape[0]}')
-#             logging.info(f'abnormal_windows count = {abnormal_windows.shape[0]}')
-#             logging.info(f'abnormal_windows_train count = {abnormal_windows_train.shape[0]}')
-#             logging.info(f'abnormal_windows_test count = {abnormal_windows_test.shape[0]}')
+    #         # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(0.5 * abnormal_windows.shape[0])])
+    #         abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [normal_windows.shape[0]])
+    #         logging.info(f'normal_windows count = {normal_windows.shape[0]}')
+    #         logging.info(f'abnormal_windows count = {abnormal_windows.shape[0]}')
+    #         logging.info(f'abnormal_windows_train count = {abnormal_windows_train.shape[0]}')
+    #         logging.info(f'abnormal_windows_test count = {abnormal_windows_test.shape[0]}')
 
-#             # concatenate (pd.concat), shuffle (df.sample) and turn "label" column into y (df.pop)
-#             X_train, y_train = utils.dfs_to_XY([normal_windows, abnormal_windows_train])
-#             X_test, y_test = utils.dfs_to_XY([normal_windows, abnormal_windows_test])
+    #         # concatenate (pd.concat), shuffle (df.sample) and turn "label" column into y (df.pop)
+    #         X_train, y_train = utils.dfs_to_XY([normal_windows, abnormal_windows_train])
+    #         X_test, y_test = utils.dfs_to_XY([normal_windows, abnormal_windows_test])
 
-#             logging.info(f'X_train count = {X_train.shape[0]}')
-#             logging.info(f'X_test count = {X_test.shape[0]}')
+    #         logging.info(f'X_train count = {X_train.shape[0]}')
+    #         logging.info(f'X_test count = {X_test.shape[0]}')
 
-#             conventional_ml.assign_min_max_for_normalization(X_train)
-#             X_train = conventional_ml.normalize(X_train)
-#             X_test = conventional_ml.normalize(X_test)
+    #         conventional_ml.assign_min_max_for_normalization(X_train)
+    #         X_train = conventional_ml.normalize(X_train)
+    #         X_test = conventional_ml.normalize(X_test)
 
-#             # df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
-#             #         df_a_ground_truth,
-#             #         window_size # window/sequence size
-#             #         )
-#             # import pdb; pdb.set_trace()
+    #         # df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
+    #         #         df_a_ground_truth,
+    #         #         window_size # window/sequence size
+    #         #         )
+    #         # import pdb; pdb.set_trace()
 
-#             # generate mixed (normal+abnormal) training dataset
-#             # generate test dataset that consists of:
-#             # - abnormal examples not used in training
-#             # - normal examples used in training
+    #         # generate mixed (normal+abnormal) training dataset
+    #         # generate test dataset that consists of:
+    #         # - abnormal examples not used in training
+    #         # - normal examples used in training
 
-#             # conventional_ml.assign_min_max_for_normalization()
-#             # conventional_ml.normalize()
-#             for model_class in conventional_ml.models:
-#                 model = model_class()
-#                 name = f'{model.__class__.__name__} (n={window_size})'
-#                 model.fit(X_train, y_train)
-#                 y_pred = model.predict(X_test)
-#                 evaluation_metrics = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
-#                 df_results.loc[name] = evaluation_metrics
+    #         # conventional_ml.assign_min_max_for_normalization()
+    #         # conventional_ml.normalize()
+    #         for model_class in conventional_ml.models:
+    #             model = model_class()
+    #             name = f'{model.__class__.__name__} (n={window_size})'
+    #             model.fit(X_train, y_train)
+    #             y_pred = model.predict(X_test)
+    #             em = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
+    #             # df_results.loc[name] = evaluation_metrics
+    #             df_results_all[window_size].loc[name] = em
+    #             df_results_all_merged.loc[name] = em
 
+    if conf['cnn'].getboolean('active'):
+        for window_size in window_sizes:
+            normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True)
+            abnormal_windows = utils.pc_df_to_sliding_windows(df_a, window_size=window_size, unique=True)
+            # Remove normal_windows from abnormal_windows because programs with abnormalities contain normal windows as well,
+            # unless we remove them just like it's done here.
+            abnormal_windows = abnormal_windows.merge(normal_windows, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
+
+            normal_windows['label'] = 0
+            abnormal_windows['label'] = 1
+
+            # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(0.5 * abnormal_windows.shape[0])])
+            abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [normal_windows.shape[0]])
+            logging.info(f'normal_windows count = {normal_windows.shape[0]}')
+            logging.info(f'abnormal_windows count = {abnormal_windows.shape[0]}')
+            logging.info(f'abnormal_windows_train count = {abnormal_windows_train.shape[0]}')
+            logging.info(f'abnormal_windows_test count = {abnormal_windows_test.shape[0]}')
+
+            # concatenate (pd.concat), shuffle (df.sample) and turn "label" column into y (df.pop)
+            X_train, y_train = utils.dfs_to_XY([normal_windows, abnormal_windows_train])
+            X_test, y_test = utils.dfs_to_XY([normal_windows, abnormal_windows_test])
+
+            logging.info(f'X_train count = {X_train.shape[0]}')
+            logging.info(f'X_test count = {X_test.shape[0]}')
+
+            cnn.assign_min_max_for_normalization(X_train)
+            X_train = cnn.normalize(X_train)
+            X_test = cnn.normalize(X_test)
+
+            # df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
+            #         df_a_ground_truth,
+            #         window_size # window/sequence size
+            #         )
+            # import pdb; pdb.set_trace()
+
+            # generate mixed (normal+abnormal) training dataset
+            # generate test dataset that consists of:
+            # - abnormal examples not used in training
+            # - normal examples used in training
+
+            model = cnn.create_model(window_size=window_size)
+            name = f'{model.__class__.__name__} (n={window_size})'
+            model.fit(X_train, y_train, epochs=conf['cnn'].getint('epochs'))
+            # y_pred = model.predict(X_test)
+            y_pred = model.predict(X_test)[:,0] < 0.5
+            
+            # import pdb; pdb.set_trace()
+            em = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
+            # df_results.loc[name] = evaluation_metrics
+            df_results_all[window_size].loc[name] = em
+            df_results_all_merged.loc[name] = em
 
     # separate figure for each window size
-    for window_size, df_results in df_results_all.items():
-        axs = df_results[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results (window_size={window_size})')
+    if conf['output'].getboolean('separate_figure_for_each_window'):
+        for window_size, df_results in df_results_all.items():
+            axs = df_results[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results (window_size={window_size})')
+            for ax in axs:
+                for container in ax.containers:
+                    # set numerical label on top of bar/rectangle
+                    ax.bar_label(container)
+
+    # single figure containing window sizes
+    if conf['output'].getboolean('single_figure_containing_all_window_sizes'):
+        axs = df_results_all_merged[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results all window sizes')
         for ax in axs:
             for container in ax.containers:
                 # set numerical label on top of bar/rectangle
                 ax.bar_label(container)
-
-    # single figure containing window sizes
-    axs = df_results_all_merged[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results all window sizes')
-    for ax in axs:
-        for container in ax.containers:
-            # set numerical label on top of bar/rectangle
-            ax.bar_label(container)
     plt.show()
 
     #for col_a in df_a:
