@@ -43,7 +43,7 @@ def read_pc_values(f_name, relative_pc=False, ignore_non_jumps=False, load_addre
     return pcs
 
 def df_from_pc_files(f_list, column_prefix='', relative_pc=False, ignore_non_jumps=False, load_address=0):
-    if (len(f_list) == 1 and type(f_list != str)) or type(f_list[0]) != str:
+    if (len(f_list) == 1 and type(f_list != str)) and type(f_list[0]) != str:
         f_list = [item.name for item in f_list]
     all_pc = []
     for f_name in f_list:
