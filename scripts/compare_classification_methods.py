@@ -417,6 +417,7 @@ if __name__ == '__main__':
     #             df_results_all_merged.loc[name] = em
 
     if conf['cnn'].getboolean('active'):
+        epochs_all = [int(ws) for ws in conf['cnn'].get('epochs').strip().split(',')]
         for window_size in window_sizes:
             normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True)
             abnormal_windows = utils.pc_df_to_sliding_windows(df_a, window_size=window_size, unique=True)
@@ -428,7 +429,8 @@ if __name__ == '__main__':
             abnormal_windows['label'] = 1
 
             # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(0.5 * abnormal_windows.shape[0])])
-            abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [normal_windows.shape[0]])
+            # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [normal_windows.shape[0]])
+            abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(abnormal_windows.shape[0]*0.8)])
             logging.info(f'normal_windows count = {normal_windows.shape[0]}')
             logging.info(f'abnormal_windows count = {abnormal_windows.shape[0]}')
             logging.info(f'abnormal_windows_train count = {abnormal_windows_train.shape[0]}')
@@ -456,17 +458,19 @@ if __name__ == '__main__':
             # - abnormal examples not used in training
             # - normal examples used in training
 
-            model = cnn.create_model(window_size=window_size)
-            name = f'{model.__class__.__name__} (n={window_size})'
-            model.fit(X_train, y_train, epochs=conf['cnn'].getint('epochs'))
-            # y_pred = model.predict(X_test)
-            y_pred = model.predict(X_test)[:,0] < 0.5
-            
-            # import pdb; pdb.set_trace()
-            em = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
-            # df_results.loc[name] = evaluation_metrics
-            df_results_all[window_size].loc[name] = em
-            df_results_all_merged.loc[name] = em
+            for epochs in epochs_all:
+                model = cnn.create_model(window_size=window_size)
+                # name = f'{model.__class__.__name__} (n={window_size})'
+                name = f'CNN (n={window_size}, epochs={epochs})'
+                model.fit(X_train, y_train, epochs=epochs)
+                # y_pred = model.predict(X_test)
+                y_pred = model.predict(X_test)[:,0] < 0.5
+                
+                # import pdb; pdb.set_trace()
+                em = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
+                # df_results.loc[name] = evaluation_metrics
+                df_results_all[window_size].loc[name] = em
+                df_results_all_merged.loc[name] = em
 
     # separate figure for each window size
     if conf['output'].getboolean('separate_figure_for_each_window'):
