@@ -264,6 +264,8 @@ class Detection_Model(ABC):
     def predict_all(self, df_a):
         return [self.predict(df_a[[col_a]]) for col_a in df_a]
         
+    def predict_all_2(self, abnormal_windows_all_files):
+        return [self.predict_2(windows) for windows in abnormal_windows_all_files]
 
 
 

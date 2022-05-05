@@ -44,8 +44,8 @@ from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.svm import SVC, LinearSVC, NuSVC
 
 models = [
-    MultinomialNB,
-    BernoulliNB,
+    # MultinomialNB,
+    # BernoulliNB,
     LogisticRegression,
     SGDClassifier,
     SVC,

@@ -18,6 +18,8 @@ def standardize_files_input(files_input):
     f_list = files_input
     if type(f_list) == str:
         f_list = [f_list]
+    elif type(f_list[0]) == str:
+        return f_list
     elif (len(f_list) == 1 and type(f_list != str)) or type(f_list[0]) != str:
         f_list = [item.name for item in f_list]
     return f_list
@@ -69,6 +71,13 @@ def df_from_pc_files(f_list, column_prefix='', relative_pc=False, ignore_non_jum
     return df
 
 
+def read_syscall_groups(f_name, group_prefix=''):
+    df = pd.read_csv(f_name, header=None, delimiter='\s+', engine='python')
+    groups = {}
+    for group_name, indices in df.groupby(df.columns[0]).groups.items():
+        name = f'{group_prefix}__{group_name}'
+        groups[name] = df[1].loc[ indices ].reset_index(drop=True).values.tolist()
+    return groups
 
 def df_from_syscall_files(f_list, column_prefix=''):
     ''' Files with system calls traces used in 1998 paper called 
@@ -77,16 +86,20 @@ def df_from_syscall_files(f_list, column_prefix=''):
     '''
     f_list = standardize_files_input(f_list)
     all_syscalls = []
+    all_groups = {}
     for f_name in f_list:
         # A single file can have multiple processes, these need to be separated.
         # This means that file names no longer can be column names.
         # Column names must have file names with process IDs (PIDs).
-        pc_chunk = read_syscall_values(f_name) 
-        pd.read_csv(f_name, header=None, delimiter='\s+', engine='python')
-        all_syscalls.append(pc_chunk)
+        groups = read_syscall_groups(
+                f_name,
+                group_prefix = column_prefix+os.path.basename(f_name)
+                ) 
+        all_groups.update(groups)
 
-    column_names = [column_prefix + os.path.basename(f_name) for f_name in f_list]
-    df = pd.DataFrame(all_syscalls, dtype=np.int64, index=column_names).T
+    # column_names = [column_prefix + os.path.basename(f_name) for f_name in f_list]
+    # df = pd.DataFrame.from_dict(all_groups, dtype=np.int64, index=column_names).T
+    df = pd.DataFrame.from_dict(all_groups, dtype=np.int64, orient='index').T
     return df
 
 def relative_from_absolute_pc(pc_collection):
@@ -158,6 +171,7 @@ def append_features_to_sliding_windows(windows):
     windows['max'] = max_
     windows['jumps_count'] = jumps_count
     windows['mean_jump_size'] = mean_jump_size
+    windows.fillna(0, inplace=True) # mean_jump_size may be NaN in case of system calls...
     return windows
 
 # def multiple_files_df_program_counters_to_unique_sliding_windows(df, window_size):

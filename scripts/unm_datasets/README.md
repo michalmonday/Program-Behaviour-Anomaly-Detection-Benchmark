@@ -22,8 +22,7 @@ stide abnormal_files=1(105 pids), normal_files=13726(13726 pids)
 sendmail abnormal_files=0(0 pids), normal_files=71767(71760 pids)
 ```
 
-The following files were removed by me from original dataset because they were empty:  
+1 file from lpr_mit normal dataset and 7 files from sendmail normal dataset were deleted (moved to "deleted" folder) because they were empty. Judging by the number of examples in the "Alternative Data Models" paper, the same was done there. Example empty file:  
 ```
 lpr_mit/normal/857428790-sma-03Mar1997-171345-1212.log.int
-
 ```

@@ -66,10 +66,10 @@ class Isolation_Forest(Detection_Model):
         normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=n, unique=True)
         self.model.fit(normal_windows)
         self.train_n = n
-
-        # logging.info(f'Number of train programs: {df_n.shape[1]}')
-        # logging.info(f'Longest train program size: {df_n.shape[0]} instructions')
         logging.info(f'Number of unique train sequences (with size of {n}): {normal_windows.shape[0]}')
+
+    def train_2(self, normal_windows):
+        self.model.fit(normal_windows)
 
     def predict(self, df_a_col):
         # gets abnormal_ut entries that are not present in normal_ut
@@ -84,6 +84,9 @@ class Isolation_Forest(Detection_Model):
         results = self.model.predict(abnormal_windows)
         results = [i==-1 for i in results]
         return results
+
+    def predict_2(self, abnormal_windows):
+        return [i==-1 for i in self.model.predict(abnormal_windows)]
 
     # def predict_all(self, df_a):
     #     return [self.predict(df_a[[col_a]]) for col_a in df_a]
