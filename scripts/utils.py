@@ -10,6 +10,18 @@ from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 
 TITLE_SIZE = 20
 
+def standardize_files_input(files_input):
+    ''' files_input can be a string, a list of strings, a file object,
+        a list of file objects.
+
+        The return is always a list of strings. '''
+    f_list = files_input
+    if type(f_list) == str:
+        f_list = [f_list]
+    elif (len(f_list) == 1 and type(f_list != str)) or type(f_list[0]) != str:
+        f_list = [item.name for item in f_list]
+    return f_list
+
 def hexify_y_axis(ax):
     ax.get_yaxis().set_major_formatter(lambda y,pos: hex(int(y)))
 
@@ -43,18 +55,38 @@ def read_pc_values(f_name, relative_pc=False, ignore_non_jumps=False, load_addre
     return pcs
 
 def df_from_pc_files(f_list, column_prefix='', relative_pc=False, ignore_non_jumps=False, load_address=0):
-    if (len(f_list) == 1 and type(f_list != str)) and type(f_list[0]) != str:
-        f_list = [item.name for item in f_list]
+    ''' ".pc" files contain '\n'-separated hexadecimal program counter values
+        collected from userspace program (e.g. using qtrace from Qemu emulator 
+        running CHERI-RISC-V). '''
+    f_list = standardize_files_input(f_list)
     all_pc = []
     for f_name in f_list:
         pc_chunk = read_pc_values(f_name, relative_pc=relative_pc, ignore_non_jumps=ignore_non_jumps, load_address=load_address) 
         all_pc.append(pc_chunk)
 
-    def short_name(f_name):
-        return f_name.split('/')[-1] 
-
-    column_names = [column_prefix + short_name(f_name) for f_name in f_list]
+    column_names = [column_prefix + os.path.basename(f_name) for f_name in f_list]
     df = pd.DataFrame(all_pc, dtype=np.int64, index=column_names).T
+    return df
+
+
+
+def df_from_syscall_files(f_list, column_prefix=''):
+    ''' Files with system calls traces used in 1998 paper called 
+        "Detecting Intrusions Using System Calls: Alternative Data Models".
+        Available at: https://www.cs.unm.edu/~immsec/systemcalls.htm
+    '''
+    f_list = standardize_files_input(f_list)
+    all_syscalls = []
+    for f_name in f_list:
+        # A single file can have multiple processes, these need to be separated.
+        # This means that file names no longer can be column names.
+        # Column names must have file names with process IDs (PIDs).
+        pc_chunk = read_syscall_values(f_name) 
+        pd.read_csv(f_name, header=None, delimiter='\s+', engine='python')
+        all_syscalls.append(pc_chunk)
+
+    column_names = [column_prefix + os.path.basename(f_name) for f_name in f_list]
+    df = pd.DataFrame(all_syscalls, dtype=np.int64, index=column_names).T
     return df
 
 def relative_from_absolute_pc(pc_collection):
@@ -109,6 +141,23 @@ def pc_df_to_sliding_windows(df, window_size, unique=False):
         windows = series_to_sliding_windows(df['all_pc'], window_size)
     if unique:
         windows = windows.drop_duplicates()
+    return windows
+
+def append_features_to_sliding_windows(windows):
+    # generate features first before including them in the dataframe
+    mean = windows.mean(axis=1)
+    std = windows.std(axis=1)
+    min_ = windows.min(axis=1)
+    max_ = windows.max(axis=1)
+    jumps_count = (windows.diff(axis=1).abs() > 4.0).sum(axis=1)
+    mean_jump_size = windows.diff(axis=1).abs()[ (windows.diff(axis=1).abs() > 4.0) ].mean(axis=1)
+    # include features
+    windows['mean'] = mean
+    windows['std'] = std
+    windows['min'] = min_
+    windows['max'] = max_
+    windows['jumps_count'] = jumps_count
+    windows['mean_jump_size'] = mean_jump_size
     return windows
 
 # def multiple_files_df_program_counters_to_unique_sliding_windows(df, window_size):
