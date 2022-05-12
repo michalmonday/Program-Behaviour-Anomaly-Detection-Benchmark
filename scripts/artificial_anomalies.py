@@ -304,27 +304,28 @@ class Artificial_Anomalies:
         # REDUCE LOOPS
         # Reducing loops can't be very randomized so it's done after all other 
         # anomalies are introduced (where program counter values are randomized).
-        for j, column_name in enumerate(df_n):
-            new_column_name = column_name.replace('normal', f'reduced_loops', 1)
-            col, first_iteration_ranges, reduced_ranges, col_a_ground_truth = __class__.reduce_loops(
-                    df_n[column_name],
-                    min_iteration_size=min_iteration_size
-                    )
-            new_column = pd.Series([np.NaN]*df_n.shape[0])
-            new_column[0:col.shape[0]] = col
-            # logging.info(f'new_column: {new_column}')
-            # pav = pd.Series()
-            df_a[new_column_name] = new_column
-            df_a_ground_truth[new_column_name] = col_a_ground_truth
-            pav = []
-            # TODO: append original values based on "col.probably_loc[reduced_range] for reduced_range in reduced_ranges"
-            for r in sorted(reduced_ranges):
-                # pav = pav.combine(col.loc[r[0]:r[1]], max, fill_value=-1)
-                pav.append(df_n[column_name].loc[r[0]:r[1]].copy())
-            # specific_values=[True] will return anomaly ranges only
-            ar = utils.get_same_consecutive_values_ranges(col_a_ground_truth, specific_values=[True])
-            pre_anomaly_values.append(pav)
-            anomalies_ranges.append(ar)
+        if reduce_loops:
+            for j, column_name in enumerate(df_n):
+                new_column_name = column_name.replace('normal', f'reduced_loops', 1)
+                col, first_iteration_ranges, reduced_ranges, col_a_ground_truth = __class__.reduce_loops(
+                        df_n[column_name],
+                        min_iteration_size=min_iteration_size
+                        )
+                new_column = pd.Series([np.NaN]*df_n.shape[0])
+                new_column[0:col.shape[0]] = col
+                # logging.info(f'new_column: {new_column}')
+                # pav = pd.Series()
+                df_a[new_column_name] = new_column
+                df_a_ground_truth[new_column_name] = col_a_ground_truth
+                pav = []
+                # TODO: append original values based on "col.probably_loc[reduced_range] for reduced_range in reduced_ranges"
+                for r in sorted(reduced_ranges):
+                    # pav = pav.combine(col.loc[r[0]:r[1]], max, fill_value=-1)
+                    pav.append(df_n[column_name].loc[r[0]:r[1]].copy())
+                # specific_values=[True] will return anomaly ranges only
+                ar = utils.get_same_consecutive_values_ranges(col_a_ground_truth, specific_values=[True])
+                pre_anomaly_values.append(pav)
+                anomalies_ranges.append(ar)
 
         return df_a, df_a_ground_truth, anomalies_ranges, pre_anomaly_values
 

@@ -146,7 +146,11 @@ def merge_pc_df_columns(df):
 
 def pc_df_to_sliding_windows(df, window_size, unique=False):
     ''' df contains a column per each ".pc" file where each row contains
-        program counter values '''
+        program counter values.
+
+        Note from 06/05/2022: this should most likely work as well for 
+        df containing syscalls... Because it just makes little windows out 
+        of a series, it doesn't care what values the series contains. '''
     if type(df) == pd.core.series.Series:
         windows = series_to_sliding_windows(df, window_size)
     else:
@@ -162,8 +166,14 @@ def append_features_to_sliding_windows(windows):
     std = windows.std(axis=1)
     min_ = windows.min(axis=1)
     max_ = windows.max(axis=1)
-    jumps_count = (windows.diff(axis=1).abs() > 4.0).sum(axis=1)
-    mean_jump_size = windows.diff(axis=1).abs()[ (windows.diff(axis=1).abs() > 4.0) ].mean(axis=1)
+    try:
+        jumps_count = (windows.diff(axis=1).abs() > 4.0).sum(axis=1)
+    except:
+        jumps_count = 0
+    try:
+        mean_jump_size = windows.diff(axis=1).abs()[ (windows.diff(axis=1).abs() > 4.0) ].mean(axis=1)
+    except:
+        mean_jump_size = 0
     # include features
     windows['mean'] = mean
     windows['std'] = std

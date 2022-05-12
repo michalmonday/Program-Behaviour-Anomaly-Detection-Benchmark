@@ -61,31 +61,10 @@ class Isolation_Forest(Detection_Model):
         self.model = IsolationForest(n_estimators=100, random_state=0, warm_start=True, *args, **kwargs)
         self.train_n = None
 
-    def train(self, df_n, n=2):
-        # utils.print_header(f'ISOLATION FOREST (n={n})')
-        normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=n, unique=True)
-        self.model.fit(normal_windows)
-        self.train_n = n
-        logging.info(f'Number of unique train sequences (with size of {n}): {normal_windows.shape[0]}')
-
-    def train_2(self, normal_windows):
+    def train(self, normal_windows):
         self.model.fit(normal_windows)
 
-    def predict(self, df_a_col):
-        # gets abnormal_ut entries that are not present in normal_ut
-        # (it ignores df index so that's why it's ugly)
-        # it's from: https://stackoverflow.com/a/50645672/4620679
-        # import pdb; pdb.set_trace()
-
-        # logging.info(df_a_col)
-        # logging.info(type(df_a_col))
-
-        abnormal_windows = utils.pc_df_to_sliding_windows(df_a_col, window_size=self.train_n, unique=False)
-        results = self.model.predict(abnormal_windows)
-        results = [i==-1 for i in results]
-        return results
-
-    def predict_2(self, abnormal_windows):
+    def predict(self, abnormal_windows):
         return [i==-1 for i in self.model.predict(abnormal_windows)]
 
     # def predict_all(self, df_a):

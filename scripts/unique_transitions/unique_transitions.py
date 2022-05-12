@@ -78,60 +78,11 @@ class Unique_Transitions(Detection_Model):
         self.normal_ut = None
         self.train_n = None
 
-    def train(self, df_n, n=2):
-        # utils.print_header(f'UNIQUE TRANSITIONS (n={n})')
-        self.normal_ut = utils.pc_df_to_sliding_windows(df_n, window_size=n, unique=True)
-        self.train_n = n
-
-        # logging.info(f'Number of train programs: {df_n.shape[1]}')
-        # logging.info(f'Longest train program size: {df_n.shape[0]} instructions')
-        logging.info(f'Number of unique train sequences (with size of {n}): {self.normal_ut.shape[0]}')
-
-    def train_2(self, normal_windows):
+    def train(self, normal_windows):
         self.normal_ut = normal_windows
         self.train_n = normal_windows.shape[0]
 
-    def predict(self, df_a_col):
-        # gets abnormal_ut entries that are not present in normal_ut
-        # (it ignores df index so that's why it's ugly)
-        # it's from: https://stackoverflow.com/a/50645672/4620679
-        # import pdb; pdb.set_trace()
-
-        # logging.info(df_a_col)
-        # logging.info(type(df_a_col))
-
-        abnormal_ut = utils.pc_df_to_sliding_windows(df_a_col, window_size=self.train_n, unique=True)
-        # detected_ut_orig = abnormal_ut[ ~abnormal_ut[ ~abnormal_ut.stack().isin(self.normal_ut.stack().values).unstack()].isna().all(axis=1) ].dropna()
-        try:
-            detected_ut = abnormal_ut.merge(self.normal_ut, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
-        except Exception as e:
-            logging.error(f'{e}')
-            import pdb; pdb.set_trace()
-
-        # set is used for fast lookup
-        detected_ut_set = set()
-
-        def window_to_str(row):
-            ''' strings are used (stored as a set) to make the lookup fast and easy '''
-            return '-'.join(str(v) for v in row.values)
-
-        def was_detected(row):
-            window_str = window_to_str(row)
-            # logging.info(f'window_str={window_str}')
-            return window_str  in detected_ut_set
-
-        for i, row in detected_ut.iterrows():
-            detected_ut_set.add( window_to_str(row) )
-
-        # get PC values in abnormal run where unseen transitions (detected_ut) are observed
-        # df_a_col_detected_points = df_a_col[ df_a_col.iloc[:,0].rolling(self.train_n).apply(lambda x: was_detected(x) ) > 0.0 ]
-
-        # df_a_col['detected_anomaly'] = df_a_col.iloc[:,0].rolling(self.train_n).apply(lambda x: was_detected(x) ) > 0.0
-        # return df_a_col
-        results = df_a_col.iloc[:,0].rolling(self.train_n).apply(lambda x: was_detected(x) ).dropna() > 0.0
-        return results
-
-    def predict_2(self, abnormal_windows):
+    def predict(self, abnormal_windows):
         # gets abnormal_ut entries that are not present in normal_ut
         # (it ignores df index so that's why it's ugly)
         # it's from: https://stackoverflow.com/a/50645672/4620679
