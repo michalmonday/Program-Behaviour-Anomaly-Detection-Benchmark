@@ -61,7 +61,7 @@ class Isolation_Forest(Detection_Model):
         self.model = IsolationForest(n_estimators=100, random_state=0, warm_start=True, *args, **kwargs)
         self.train_n = None
 
-    def train(self, normal_windows):
+    def train(self, normal_windows, **kwargs):
         self.model.fit(normal_windows)
 
     def predict(self, abnormal_windows):

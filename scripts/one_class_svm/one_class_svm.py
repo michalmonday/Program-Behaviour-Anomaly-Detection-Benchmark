@@ -27,7 +27,7 @@ class OneClass_SVM(Detection_Model):
         self.model = OneClassSVM(nu=nu, kernel=kernel, gamma=gamma, *args, **kwargs)
         self.train_n = None
 
-    def train(self, normal_windows):
+    def train(self, normal_windows, **kwargs):
         self.model.fit(normal_windows)
 
     def predict(self, abnormal_windows):

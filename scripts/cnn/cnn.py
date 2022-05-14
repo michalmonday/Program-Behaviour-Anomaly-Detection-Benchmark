@@ -54,9 +54,11 @@ class CNN(Detection_Model):
     def __init__(self, *args, **kwargs):
         self.network_size_multiplier = kwargs.get('network_size_multiplier', 1)
 
-    def train(self, normal_windows, normal_labels, epochs):
-        self.model = create_model(normal_windows.shape[1], size_multiplier=self.network_size_multiplier)
-        self.model.fit(normal_windows, normal_labels, epochs=epochs)
+    def train(self, windows, labels=None, epochs=1, **kwargs):
+        if labels is None:
+            raise Exception('No labels were supplied to CNN.train(...) method.')
+        self.model = create_model(windows.shape[1], size_multiplier=self.network_size_multiplier)
+        self.model.fit(windows, labels, epochs=epochs)
 
     def predict(self, X_test):
         return self.model.predict(X_test)[:,0] < 0.5

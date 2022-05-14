@@ -305,7 +305,7 @@ class LSTM_Autoencoder(Detection_Model):
 
         return ranges
 
-    def train(self, df_n, n=20, epochs=10, forest_size=6):
+    def train(self, df_n, n=20, epochs=10, forest_size=6, **kwargs):
         # keep reference to supplied window size, to use the same at testing/predicting
         self.window_size = n
         # utils.print_header(f'LSTM AUTOENCODER (window_size={self.window_size}, forest_size={forest_size})')

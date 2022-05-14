@@ -165,9 +165,6 @@ from local_outlier_factor.local_outlier_factor import Local_Outlier_Factor
 from detection_model import Detection_Model
 from conventional_machine_learning import conventional_machine_learning as conventional_ml
 from cnn import cnn as cnn_module
-from cnn_enlarged import cnn_enlarged
-from cnn_very_enlarged import cnn_very_enlarged
-from cnn_very2_enlarged import cnn_very2_enlarged
 import unm_datasets
 from normalizer import Normalizer
 
@@ -414,47 +411,59 @@ if __name__ == '__main__':
     #         'unique_transitions'   : (Unique_Transitions, {})
     #         }
 
-    # anomaly_detection_models = {
-    #         # keys correspond to config file section names
-    #         # values are classes (that inherit from Detection_Model class,
-    #         #                     and must implement "train" and "predict", 
-    #         #                     Detection_Model has a common evaluate_all method)
-    #         'unique_transitions'   : (Unique_Transitions, {}),
-    #         'isolation_forest'     : (Isolation_Forest, {'contamination':0.001}),
-    #         'one_class_svm'        : (OneClass_SVM, {'nu':0.1}),
-    #         # 'one_class_svm'        : (OneClass_SVM, {'nu':0.06}),
-    #         # 'one_class_svm'        : (OneClass_SVM, {'nu':0.03}),
-    #         # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'linear'}),
-    #         # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'poly'}),
-    #         # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'rbf'}),
-    #         'one_class_svm'        : (OneClass_SVM, {'kernel': 'sigmoid'}),
-    #         'local_outlier_factor' : (Local_Outlier_Factor, {'contamination':0.001})#,
-    #         # 'lstm_autoencoder'     : (LSTM_Autoencoder, {})
-    #         }
-    anomaly_detection_models = {}
+    anomaly_detection_models = {
+            # keys correspond to config file section names
+            # values are classes (that inherit from Detection_Model class,
+            #                     and must implement "train" and "predict", 
+            #                     Detection_Model has a common evaluate_all method)
+            # 'unique_transitions'   : (Unique_Transitions, {}),
+            'isolation_forest'     : (Isolation_Forest, {'contamination':0.001}),
+            'one_class_svm'        : (OneClass_SVM, {'nu':0.1}),
+            # 'one_class_svm'        : (OneClass_SVM, {'nu':0.06}),
+            # 'one_class_svm'        : (OneClass_SVM, {'nu':0.03}),
+            # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'linear'}),
+            # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'poly'}),
+            # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'rbf'}),
+            'one_class_svm'        : (OneClass_SVM, {'kernel': 'sigmoid'}),
+            'local_outlier_factor' : (Local_Outlier_Factor, {'contamination':0.001})#,
+            # 'lstm_autoencoder'     : (LSTM_Autoencoder, {})
+            'cnn'                  : (cnn_module.CNN, {'epochs':100})
+            }
+    # anomaly_detection_models = {}
 
+    # this split size it based on assumption that a single program run/example contains a single anomaly
+    # (possibly made of multiple program counters)
     window_sizes = [int(ws) for ws in conf['data'].get('window_sizes').strip().split(',')]
     append_sliding_window_features = conf['data'].getboolean('append_features_to_sliding_windows')
     # for append_sliding_window_features in [True, False]:
     df_results_all = {ws:pd.DataFrame(columns=Detection_Model.evaluation_metrics) for ws in window_sizes}
     df_results_all_merged = pd.DataFrame(columns=Detection_Model.evaluation_metrics)
+
+    # Precompute artificial anomalous examples for those detection methods that use both types (normal + anomalous)
+    # in training. This has to be done here (once) to make sure that the same dataset is used for all of such 
+    # detection methods.
+    abnormal_windows_training_size = int(df_a.shape[1] / (1-conf['models_that_train_with_abnormal_examples'].getfloat('abnormal_examples_training_split')))
+    artificial_training_windows_all_sizes = {} # key = window size, value = windows dataframe
+    for window_size in window_sizes:
+        df_a_artificial, _, _, _ = Artificial_Anomalies.generate(
+                    df_n,
+                    abnormal_windows_training_size,
+                    reduce_loops = False
+                    )
+        artificial_training_windows_all_sizes[window_size] = utils.pc_df_to_sliding_windows(df_a_artificial, window_size=window_size, unique=True, append_features=append_sliding_window_features)
+
     for name, (model_class, constructor_kwargs) in anomaly_detection_models.items():
         # if not conf[name]['active']:
         #     logging.info(f'Omitting "{name}" method because config has active=False')
         #     continue
 
         for window_size in window_sizes:
-            normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True)
-            if append_sliding_window_features:
-                normal_windows = utils.append_features_to_sliding_windows(normal_windows)
+            normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True, append_features=append_sliding_window_features)
             df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
                     df_a_ground_truth,
                     window_size 
                     )
-            abnormal_windows_all_files = [ utils.pc_df_to_sliding_windows(df_a[[col_a]], window_size=window_size, unique=False) for col_a in df_a ]
-            if append_sliding_window_features:
-                for i, abnormal_windows in enumerate(abnormal_windows_all_files):
-                    abnormal_windows_all_files[i] = utils.append_features_to_sliding_windows(abnormal_windows)
+            abnormal_windows_all_files = [ utils.pc_df_to_sliding_windows(df_a[[col_a]], window_size=window_size, unique=False, append_features=append_sliding_window_features) for col_a in df_a ]
             # constructor_args = {}
             # if 'constructor_args' in conf[name]:
             #     constructor_args = json.loads( conf[name].get('constructor_args').strip()[1:-1] )
@@ -467,14 +476,32 @@ if __name__ == '__main__':
 
             utils.print_header(method_name)
 
+
+            training_windows = normal_windows
+            testing_windows = abnormal_windows_all_files
+
+            # add abnormal windows to training if needed
+            if conf[name].getboolean('train_using_abnormal_windows_too'):
+                logging.info('Appending artificial anomalous training files.')
+                # labels/examples could be shuffled here by appending "label" column to both: training_windows, 
+                # abnormal_training_windows, concating them, shuffling, and popping the "label" column
+                windows_to_add = artificial_training_windows_all_sizes[window_size]
+                train_args['labels'] = np.array([0] * training_windows.shape[0] + [1] * windows_to_add.shape[0])
+                training_windows = pd.concat([training_windows, windows_to_add]).reset_index(drop=True)
+
+            if conf[name].getboolean('normalize_dataset'):
+                normalizer = Normalizer()
+                normalizer.assign_min_max_for_normalization(training_windows)
+                training_windows = normalizer.normalize(training_windows)
+                abnormal_windows_all_files = [normalizer.normalize(windows) for windows in abnormal_windows_all_files]
+                
             # instantiation
             model = model_class(**constructor_kwargs)
 
             # training
             logging.info('Training...')
             start_time = time.time() 
-            # model.train(df_n, n=window_size, **train_args)
-            model.train(normal_windows, **train_args)
+            model.train(training_windows, **train_args)
             training_time = (time.time() - start_time)*1000
             logging.info(f'Training took {training_time:.0f}ms')
 
@@ -549,260 +576,23 @@ if __name__ == '__main__':
         #             df_results_all[window_size].loc[name] = em
         #             df_results_all_merged.loc[name] = em
 
-        
-    if conf['cnn'].getboolean('active'):
-        # epochs_all = [int(ws) for ws in conf['cnn'].get('epochs').strip().split(',')]
-        for window_size in window_sizes:
-            normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True)
-            abnormal_windows = utils.pc_df_to_sliding_windows(df_a, window_size=window_size, unique=True)
-            # Remove normal_windows from abnormal_windows because programs with abnormalities contain normal windows as well,
-            # unless we remove them just like it's done here.
-            abnormal_windows = abnormal_windows.merge(normal_windows, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
-
-            normal_windows['label'] = 0
-            abnormal_windows['label'] = 1
-
-            # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(0.5 * abnormal_windows.shape[0])])
-            # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [normal_windows.shape[0]])
-            abnormal_windows_training_size = int(abnormal_windows.shape[0] * conf['models_that_train_with_abnormal_examples'].getfloat('abnormal_examples_training_split'))
-            abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [abnormal_windows_training_size])
-            logging.info(f'normal_windows count = {normal_windows.shape[0]}')
-            logging.info(f'abnormal_windows count = {abnormal_windows.shape[0]}')
-            logging.info(f'abnormal_windows_train count = {abnormal_windows_train.shape[0]}')
-            logging.info(f'abnormal_windows_test count = {abnormal_windows_test.shape[0]}')
-
-            # concatenate (pd.concat), shuffle (df.sample) and turn "label" column into y (df.pop)
-            X_train, y_train = utils.dfs_to_XY([normal_windows, abnormal_windows_train])
-            X_test, y_test = utils.dfs_to_XY([normal_windows, abnormal_windows_test])
-
-            logging.info(f'X_train count = {X_train.shape[0]}')
-            logging.info(f'X_test count = {X_test.shape[0]}')
-
-            normalizer = Normalizer()
-            normalizer.assign_min_max_for_normalization(X_train)
-            X_train = normalizer.normalize(X_train)
-            X_test = normalizer.normalize(X_test)
-
-            
-            epochs = conf['cnn'].get('epochs').strip().split(',')
-            model = cnn_module.CNN(network_size_multiplier=4)
-            name = f'{model.__class__.__name__} (n={window_size}, epochs={epochs})'
-            start_time = time.time() 
-            model.train(X_train, y_train, epochs=epochs)
-            training_time = (time.time() - start_time)*1000
-            start_time = time.time() 
-            y_pred = model.predict(X_test)
-            testing_time = (time.time() - start_time)*1000
-            
-            em = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
-            em['training_time_ms'] = int(training_time)
-            em['testing_time_ms'] = int(testing_time)
-            # df_results.loc[name] = evaluation_metrics
-            df_results_all[window_size].loc[name] = em
-            df_results_all_merged.loc[name] = em
-
-
-        # # separate figure for each window size
-        # if conf['output'].getboolean('separate_figure_for_each_window'):
-        #     for window_size, df_results in df_results_all.items():
-        #         axs = df_results[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results (window_size={window_size})')
-        #         for ax in axs:
-        #             for container in ax.containers:
-        #                 # set numerical label on top of bar/rectangle
-        #                 ax.bar_label(container)
-
-        # # single figure containing window sizes
-        # if conf['output'].getboolean('single_figure_containing_all_window_sizes'):
-        #     axs = df_results_all_merged[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results all window sizes')
-        #     for ax in axs:
-        #         for container in ax.containers:
-        #             # set numerical label on top of bar/rectangle
-        #             ax.bar_label(container)
-
-        # # cnn_enlarged start (TODO: desperately need to change this bad design)
-        # if conf['cnn'].getboolean('active'):
-        #     epochs_all = [int(ws) for ws in conf['cnn'].get('epochs').strip().split(',')]
-        #     for window_size in window_sizes:
-        #         normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True)
-        #         abnormal_windows = utils.pc_df_to_sliding_windows(df_a, window_size=window_size, unique=True)
-        #         # Remove normal_windows from abnormal_windows because programs with abnormalities contain normal windows as well,
-        #         # unless we remove them just like it's done here.
-        #         abnormal_windows = abnormal_windows.merge(normal_windows, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
-
-        #         normal_windows['label'] = 0
-        #         abnormal_windows['label'] = 1
-
-        #         # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(0.5 * abnormal_windows.shape[0])])
-        #         # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [normal_windows.shape[0]])
-        #         abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(abnormal_windows.shape[0]*0.8)])
-        #         logging.info(f'normal_windows count = {normal_windows.shape[0]}')
-        #         logging.info(f'abnormal_windows count = {abnormal_windows.shape[0]}')
-        #         logging.info(f'abnormal_windows_train count = {abnormal_windows_train.shape[0]}')
-        #         logging.info(f'abnormal_windows_test count = {abnormal_windows_test.shape[0]}')
-
-        #         # concatenate (pd.concat), shuffle (df.sample) and turn "label" column into y (df.pop)
-        #         X_train, y_train = utils.dfs_to_XY([normal_windows, abnormal_windows_train])
-        #         X_test, y_test = utils.dfs_to_XY([normal_windows, abnormal_windows_test])
-
-        #         logging.info(f'X_train count = {X_train.shape[0]}')
-        #         logging.info(f'X_test count = {X_test.shape[0]}')
-
-        #         normalizer = Normalizer()
-        #         normalizer.assign_min_max_for_normalization(X_train)
-        #         X_train = normalizer.normalize(X_train)
-        #         X_test = normalizer.normalize(X_test)
-
-        #         for epochs in epochs_all:
-        #             model = cnn_enlarged.create_model(window_size=window_size)
-        #             # name = f'{model.__class__.__name__} (n={window_size})'
-        #             name = f'CNN_enlarged (n={window_size}, epochs={epochs})'
-        #             start_time = time.time() 
-        #             model.fit(X_train, y_train, epochs=epochs)
-        #             training_time = (time.time() - start_time)*1000
-        #             start_time = time.time() 
-        #             y_pred = model.predict(X_test)[:,0] < 0.5
-        #             testing_time = (time.time() - start_time)*1000
-        #             
-        #             em = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
-        #             em['training_time_ms'] = int(training_time)
-        #             em['testing_time_ms'] = int(testing_time)
-        #             # df_results.loc[name] = evaluation_metrics
-        #             df_results_all[window_size].loc[name] = em
-        #             df_results_all_merged.loc[name] = em
-
-        # # cnn_very_enlarged start (TODO: desperately need to change this bad design) 
-        # if conf['cnn'].getboolean('active'): 
-        #     epochs_all = [int(ws) for ws in conf['cnn'].get('epochs').strip().split(',')]
-        #     for window_size in window_sizes: 
-        #         normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True)
-        #         abnormal_windows = utils.pc_df_to_sliding_windows(df_a, window_size=window_size, unique=True)
-        #         # Remove normal_windows from abnormal_windows because programs with abnormalities contain normal windows as well, # unless we remove them just like it's done here.  
-        #         abnormal_windows = abnormal_windows.merge(normal_windows, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
-
-        #         normal_windows['label'] = 0
-        #         abnormal_windows['label'] = 1
-
-        #         # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(0.5 * abnormal_windows.shape[0])])
-        #         # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [normal_windows.shape[0]])
-        #         abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(abnormal_windows.shape[0]*0.8)])
-        #         logging.info(f'normal_windows count = {normal_windows.shape[0]}')
-        #         logging.info(f'abnormal_windows count = {abnormal_windows.shape[0]}')
-        #         logging.info(f'abnormal_windows_train count = {abnormal_windows_train.shape[0]}')
-        #         logging.info(f'abnormal_windows_test count = {abnormal_windows_test.shape[0]}')
-
-        #         # concatenate (pd.concat), shuffle (df.sample) and turn "label" column into y (df.pop)
-        #         X_train, y_train = utils.dfs_to_XY([normal_windows, abnormal_windows_train])
-        #         X_test, y_test = utils.dfs_to_XY([normal_windows, abnormal_windows_test])
-
-        #         logging.info(f'X_train count = {X_train.shape[0]}')
-        #         logging.info(f'X_test count = {X_test.shape[0]}')
-
-        #         normalizer = Normalizer()
-        #         normalizer.assign_min_max_for_normalization(X_train)
-        #         X_train = normalizer.normalize(X_train)
-        #         X_test = normalizer.normalize(X_test)
-
-        #         for epochs in epochs_all:
-        #             model = cnn_very_enlarged.create_model(window_size=window_size)
-        #             # name = f'{model.__class__.__name__} (n={window_size})'
-        #             name = f'CNN_very_enlarged (n={window_size}, epochs={epochs})'
-        #             start_time = time.time() 
-        #             model.fit(X_train, y_train, epochs=epochs)
-        #             training_time = (time.time() - start_time)*1000
-        #             start_time = time.time() 
-        #             y_pred = model.predict(X_test)[:,0] < 0.5
-        #             testing_time = (time.time() - start_time)*1000
-        #             
-        #             em = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
-        #             em['training_time_ms'] = int(training_time)
-        #             em['testing_time_ms'] = int(testing_time)
-        #             # df_results.loc[name] = evaluation_metrics
-        #             df_results_all[window_size].loc[name] = em
-        #             df_results_all_merged.loc[name] = em
-
-        # # separate figure for each window size
-        # if conf['output'].getboolean('separate_figure_for_each_window'):
-        #     for window_size, df_results in df_results_all.items():
-        #         axs = df_results[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results (window_size={window_size})')
-        #         for ax in axs:
-        #             for container in ax.containers:
-        #                 # set numerical label on top of bar/rectangle
-        #                 ax.bar_label(container)
-
-        # # single figure containing window sizes
-        # if conf['output'].getboolean('single_figure_containing_all_window_sizes'):
-        #     axs = df_results_all_merged[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results all window sizes')
-        #     for ax in axs:
-        #         for container in ax.containers:
-        #             # set numerical label on top of bar/rectangle
-        #             ax.bar_label(container)
-        # # cnn_very2_enlarged start (TODO: desperately need to change this bad design) 
-        # if conf['cnn'].getboolean('active'): 
-        #     epochs_all = [int(ws) for ws in conf['cnn'].get('epochs').strip().split(',')]
-        #     for window_size in window_sizes: 
-        #         normal_windows = utils.pc_df_to_sliding_windows(df_n, window_size=window_size, unique=True)
-        #         abnormal_windows = utils.pc_df_to_sliding_windows(df_a, window_size=window_size, unique=True)
-        #         # Remove normal_windows from abnormal_windows because programs with abnormalities contain normal windows as well, # unless we remove them just like it's done here.  
-        #         abnormal_windows = abnormal_windows.merge(normal_windows, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
-
-        #         normal_windows['label'] = 0
-        #         abnormal_windows['label'] = 1
-
-        #         # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(0.5 * abnormal_windows.shape[0])])
-        #         # abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [normal_windows.shape[0]])
-        #         abnormal_windows_train, abnormal_windows_test = np.split(abnormal_windows, [int(abnormal_windows.shape[0]*0.8)])
-        #         logging.info(f'normal_windows count = {normal_windows.shape[0]}')
-        #         logging.info(f'abnormal_windows count = {abnormal_windows.shape[0]}')
-        #         logging.info(f'abnormal_windows_train count = {abnormal_windows_train.shape[0]}')
-        #         logging.info(f'abnormal_windows_test count = {abnormal_windows_test.shape[0]}')
-
-        #         # concatenate (pd.concat), shuffle (df.sample) and turn "label" column into y (df.pop)
-        #         X_train, y_train = utils.dfs_to_XY([normal_windows, abnormal_windows_train])
-        #         X_test, y_test = utils.dfs_to_XY([normal_windows, abnormal_windows_test])
-
-        #         logging.info(f'X_train count = {X_train.shape[0]}')
-        #         logging.info(f'X_test count = {X_test.shape[0]}')
-
-        #         normalizer = Normalizer()
-        #         normalizer.assign_min_max_for_normalization(X_train)
-        #         X_train = normalizer.normalize(X_train)
-        #         X_test = normalizer.normalize(X_test)
-
-        #         for epochs in epochs_all:
-        #             model = cnn_very2_enlarged.create_model(window_size=window_size)
-        #             # name = f'{model.__class__.__name__} (n={window_size})'
-        #             name = f'CNN_very2_enlarged (n={window_size}, epochs={epochs})'
-        #             start_time = time.time() 
-        #             model.fit(X_train, y_train, epochs=epochs)
-        #             training_time = (time.time() - start_time)*1000
-        #             start_time = time.time() 
-        #             y_pred = model.predict(X_test)[:,0] < 0.5
-        #             testing_time = (time.time() - start_time)*1000
-        #             
-        #             em = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
-        #             em['training_time_ms'] = int(training_time)
-        #             em['testing_time_ms'] = int(testing_time)
-        #             # df_results.loc[name] = evaluation_metrics
-        #             df_results_all[window_size].loc[name] = em
-        #             df_results_all_merged.loc[name] = em
-
-        # separate figure for each window size
-        if conf['output'].getboolean('separate_figure_for_each_window'):
-            for window_size, df_results in df_results_all.items():
-                axs = df_results[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results (window_size={window_size})')
-                for ax in axs:
-                    for container in ax.containers:
-                        # set numerical label on top of bar/rectangle
-                        ax.bar_label(container)
-
-        # single figure containing window sizes
-        if conf['output'].getboolean('single_figure_containing_all_window_sizes'):
-            axs = df_results_all_merged[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results all window sizes')
+    # separate figure for each window size
+    if conf['output'].getboolean('separate_figure_for_each_window'):
+        for window_size, df_results in df_results_all.items():
+            axs = df_results[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results (window_size={window_size})')
             for ax in axs:
                 for container in ax.containers:
                     # set numerical label on top of bar/rectangle
                     ax.bar_label(container)
-        plt.show()
+
+    # single figure containing window sizes
+    if conf['output'].getboolean('single_figure_containing_all_window_sizes'):
+        axs = df_results_all_merged[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results all window sizes')
+        for ax in axs:
+            for container in ax.containers:
+                # set numerical label on top of bar/rectangle
+                ax.bar_label(container)
+    plt.show()
 
     #for col_a in df_a:
     #    #########################################

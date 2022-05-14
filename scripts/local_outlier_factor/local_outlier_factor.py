@@ -27,7 +27,7 @@ class Local_Outlier_Factor(Detection_Model):
         self.model = LocalOutlierFactor(n_neighbors=5, novelty=True, *args, **kwargs)
         self.train_n = None
 
-    def train(self, normal_windows):
+    def train(self, normal_windows, **kwargs):
         self.model.fit(normal_windows)
 
     def predict(self, abnormal_windows):

@@ -78,7 +78,7 @@ class Unique_Transitions(Detection_Model):
         self.normal_ut = None
         self.train_n = None
 
-    def train(self, normal_windows):
+    def train(self, normal_windows, **kwargs):
         self.normal_ut = normal_windows
         self.train_n = normal_windows.shape[0]
 

@@ -144,7 +144,7 @@ def merge_pc_df_columns(df):
     df = df.dropna()
     return df
 
-def pc_df_to_sliding_windows(df, window_size, unique=False):
+def pc_df_to_sliding_windows(df, window_size, unique=False, append_features=False):
     ''' df contains a column per each ".pc" file where each row contains
         program counter values.
 
@@ -158,6 +158,8 @@ def pc_df_to_sliding_windows(df, window_size, unique=False):
         windows = series_to_sliding_windows(df['all_pc'], window_size)
     if unique:
         windows = windows.drop_duplicates()
+    if append_features:
+        windows = append_features_to_sliding_windows(windows)
     return windows
 
 def append_features_to_sliding_windows(windows):
@@ -470,9 +472,10 @@ def get_anomaly_identifier_mask(df_gt):
         return col_copy
     return df_gt.apply(f)
 
-def dfs_to_XY(dfs):
+def dfs_to_XY(dfs, shuffle=True):
     df = pd.concat(dfs)
-    df = df.sample(frac=1) # shuffle
+    if shuffle:
+        df = df.sample(frac=1) 
     y = df.pop('label')
     X = df
     return X,y

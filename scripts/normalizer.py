@@ -8,12 +8,9 @@ class Normalizer:
         self.max_val = None
 
     def assign_min_max_for_normalization(self, X_train):
-        self.min_val = tf.reduce_min(X_train.values)
-        self.max_val = tf.reduce_max(X_train.values)
+        self.min_val = tf.reduce_min(X_train.values).numpy()
+        self.max_val = tf.reduce_max(X_train.values).numpy()
 
     def normalize(self, X):
-        if type(X) == pd.core.frame.DataFrame:
-            X = X.values
-        X = (X - self.min_val) / (self.max_val - self.min_val)
-        return X
+        return (X - self.min_val) / (self.max_val - self.min_val)
 
