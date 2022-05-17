@@ -4,7 +4,7 @@ normal=$(tput sgr0)
 if [ $# -ne 1 ]; then
 LOG_FNAME=$(date +"%Y_%m_%d-%H:%M:%S").log
 else
-LOG_FNAME=test
+LOG_FNAME=$1
 fi
 echo ""
 echo "Log file will be stored in: ${bold}${LOG_FNAME}${normal}"
