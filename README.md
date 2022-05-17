@@ -27,3 +27,6 @@ python3 with pandas, numpy, matplotlib
 
 
 
+# Self reminder
+/tools/RISC-V/emulator/cheri/output/sdk/bin/llvm-objdump -sSD stack-mission_riscv64
+parser_simple.py stack-mission_riscv64_normal.log --max-pc 1000000 --llvm-objdump ../cheri-exercises/missions/uninitialized-stack-frame-control-flow/stack-mission_riscv64_llvm_objdump.output
