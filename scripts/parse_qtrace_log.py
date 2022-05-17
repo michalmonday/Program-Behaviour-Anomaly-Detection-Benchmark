@@ -7,25 +7,28 @@ import json
 def bold(text): 
     return "\033[1m" + text + "\033[0m"
 
-def get_pc(fname, main_addr, max_pc=None):
+def parse_values(fname, main_addr, max_pc=None):
     ''' fname = log file filename
         main_addr = 0x11fb2 (for example)
         max_pc = 0xffffff (for example, may be used to exclude library code) 
         '''
     pc = []
+    instr = []
     main_line_start = f'[0:0] 0x{main_addr:016x}'
     found_main = False
     with open(fname) as f:
         for i, line in enumerate(f.readlines()):
             if not found_main and line.startswith(main_line_start): found_main = True
             if not found_main: continue
-            val =  re.search(r'\[0:0\] (0x[^:]+)', line)
+            # val = re.search(r'\[0:0\] (0x[^:]+)', line)
+            val = re.search(r'\[0:0\] (0x[^:]+):\s+?\S+\s+(\S+)', line)
             if not val: continue
-            val = int( val.group(1) , 16)
-            if max_pc and max_pc < val: continue
-            pc.append(val)
+            pc_ = int( val.group(1) , 16)
+            if max_pc and max_pc < pc_: continue
+            pc.append(pc_)
+            instr.append(val.group(2))
     # return pd.DataFrame(pc, columns=[fname])
-    return pc
+    return pc, instr
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -100,14 +103,14 @@ if __name__ == '__main__':
     main_addr = function_ranges['main'][0]
     max_addr = function_ranges['total'][1] if not args.include_dlls else None
 
-    program_counters = get_pc(args.logfile.name, main_addr, max_pc = max_addr)
+    program_counters, instructions = parse_values(args.logfile.name, main_addr, max_pc = max_addr)
     
     # for pc in program_counters:
     #     print(pc)
 
     output_fname = args.o if args.o else args.logfile.name.split('.')[0] + '.pc'
     with open(output_fname, 'w') as f:
-        f.write('\n'.join([f'{pc:X}' for pc in program_counters]))
+        f.write('\n'.join([f'{pc:X},{i}' for pc,i in zip(program_counters, instructions)]))
 
     print(sys.argv[0], 'outputted program counters to', bold(output_fname))
 
