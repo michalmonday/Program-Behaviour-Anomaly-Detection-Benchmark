@@ -265,7 +265,6 @@ def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_v
 #                     #         window_size 
 #                     #         )
 # 
-#                     # import pdb; pdb.set_trace()
 # 
 #                     # abnormal_windows_all_files happens to be a list of dataframes
 #                     abnormal_windows_all_files = [ utils.pc_df_to_sliding_windows(df_a[[col_a]], window_size=window_size, unique=False) for col_a in df_a ]
@@ -299,7 +298,6 @@ def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_v
 #                     logging.info('Testing...')
 #                     start_time = time.time()
 # 
-#                     # import pdb; pdb.set_trace()
 #                     results = model.predict_all(abnormal_windows_all_files)
 #                     testing_time = (time.time() - start_time)*1000
 #                     logging.info(f'Testing took {testing_time:.0f}ms')
@@ -308,7 +306,6 @@ def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_v
 #                     for r in results:
 #                         if sum(r) > 0:
 #                             print( sum(r), '/', len(r) ) 
-#                             import pdb; pdb.set_trace()
 #                     # evaluation
 #                     # print('EVALUATION NOT DONE BUT REACHED THIS POINT')
 #                     # exit()
@@ -376,6 +373,7 @@ if __name__ == '__main__':
                 reduce_loops = conf['data'].getboolean('artificial_anomalies_reduce_loops'),
                 min_iteration_size = conf['data'].getint('artificial_anomalies_reduce_loops_min_iteration_size')
                 )
+    df_a_instr_numeric = utils.substitute_instruction_names_by_ids(df_a_instr, instruction_types)
 
     if conf['data'].getint('artificial_normal_files_count') > 0:
         logging.info('Appending artificial normal files.')
@@ -398,8 +396,6 @@ if __name__ == '__main__':
     logging.info(f'{len(instruction_types)} different instruction types were found in the trace files. These were:')
     for instr, id_ in instruction_types.items():
         logging.info(f'{instr:<6} (id={id_})')
-
-#     import pdb; pdb.set_trace()
 
     # df_a.iloc[:,-1].dropna().plot()
     # plt.plot(df_a_ground_truth.iloc[:,-1].dropna().values * df_a.iloc[:,-1].max())
@@ -485,6 +481,7 @@ if __name__ == '__main__':
                 append_features=append_sliding_window_features
                 )
         normal_windows_all_sizes[window_size] = normal_windows
+        # import pdb; pdb.set_trace()
 
         # Introduce anomalies just for training
         logging.debug(f'... generating anomalies')
@@ -513,8 +510,6 @@ if __name__ == '__main__':
         artificial_training_windows_all_sizes[window_size] = abnormal_windows
 
         # Generate abnormal windows for testing (from previously loaded/generated "df_a" dataframe)
-        logging.debug(f'... substituting instruction names')
-        df_a_instr_numeric = utils.substitute_instruction_names_by_ids(df_a_instr, instruction_types)
         logging.debug(f'... generating abnormal windows for testing')
         abnormal_windows_all_files_all_sizes[window_size] = [ utils.pc_and_instr_dfs_to_sliding_windows(df_a[[col_a]], df_a_instr_numeric[[col_a]], window_size=window_size, unique=False, append_features=append_sliding_window_features) for col_a in df_a ]
 
@@ -657,7 +652,6 @@ if __name__ == '__main__':
         #         #         df_a_ground_truth,
         #         #         window_size # window/sequence size
         #         #         )
-        #         # import pdb; pdb.set_trace()
 
         #         # generate mixed (normal+abnormal) training dataset
         #         # generate test dataset that consists of:
