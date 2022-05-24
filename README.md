@@ -1,8 +1,9 @@
-## Purpose
-The goal of this project is to compare different methods of anomaly detection in program behaviour. 
 
-## Usage
-To run the comparison we can use:
+### Purpose
+The goal of this project is to compare different methods of anomaly detection in program behaviour.   
+
+### Usage
+To run the comparison we can use:  
 
 ```bash
 python ./scripts/compare_classification_methods.py -n ./log_files/paper/csv/normal*.csv 
@@ -11,7 +12,7 @@ python ./scripts/compare_classification_methods.py -n ./log_files/paper/csv/norm
 python ./scripts/compare_classification_methods.py -n ./log_files/paper/csv/normal*.csv --function-ranges ./log_files/paper/*json
 ```
 
-# Input format
+### Input format
 Input csv files with baseline program data have two columns: program counters (in hexadecimal) and instruction types (strings). Example input file:
 ```csv
 11FB2,addi
@@ -28,7 +29,7 @@ Input csv files with baseline program data have two columns: program counters (i
 
 Abnormal files are generated artificially by copying normal input files and modifying random sections (one section per file).   
 
-# Obtaining input files
+### Obtaining input files
 Input files may be obtained in various ways (e.g. running GDB). Input files from [./log\_files/paper/csv](./log_files/paper/csv) directory were obtained from Qemu emulator running CHERI-RISC-V, using `qtrace -u exec ./stack-mission` and then processing the collected trace log file (e.g. normal\_1.log) by running the following commands:  
 
 ```bash
@@ -42,3 +43,14 @@ Input files may be obtained in various ways (e.g. running GDB). Input files from
 ./parse_qtrace_log normal_1.log --function-ranges stack-mission-function-ranges.json -o normal_1.csv
 ```
 
+![image didnt show](./images/overview.png)  
+
+
+### Preprocessing done by the comparison program
+
+![image didnt show](./images/preprocessing.png)  
+
+
+### Example results
+
+![image didnt show](./images/example_result.png)  
