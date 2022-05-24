@@ -79,7 +79,7 @@ class Unique_Transitions(Detection_Model):
         self.train_n = None
 
     def train(self, normal_windows, **kwargs):
-        self.normal_ut = normal_windows
+        self.normal_ut = pd.DataFrame(normal_windows)
         self.train_n = normal_windows.shape[0]
 
     def predict(self, abnormal_windows):
@@ -92,6 +92,7 @@ class Unique_Transitions(Detection_Model):
         # logging.info(type(df_a_col))
 
         # abnormal_ut = utils.pc_df_to_sliding_windows(df_a_col, window_size=self.train_n, unique=True)
+        abnormal_windows = pd.DataFrame(abnormal_windows)
         abnormal_ut = abnormal_windows.drop_duplicates()
         # detected_ut_orig = abnormal_ut[ ~abnormal_ut[ ~abnormal_ut.stack().isin(self.normal_ut.stack().values).unstack()].isna().all(axis=1) ].dropna()
         try:
