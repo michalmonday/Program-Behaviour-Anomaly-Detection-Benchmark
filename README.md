@@ -1,32 +1,44 @@
+## Purpose
+The goal of this project is to compare different methods of anomaly detection in program behaviour. 
 
+## Usage
+To run the comparison we can use:
 
-**stack-mission_riscv64_normal_mimic_payload.pc** file contains normal/baseline program counter values.  
-
-**stack-mission_riscv64_compromised.pc** contains some abnormal values (index range of abnormal program counter values is: 4905 - 4917).  
-
-Both were produced by running the "[uninitialized stack frame to manipulate control flow](https://ctsrd-cheri.github.io/cheri-exercises/missions/uninitialized-stack-frame-control-flow/index.html)" CHERI mission on Qemu emulator.  
-The 4905-4917 index range of values from compromised file is where the "success" function was executed (thanks to maliciously crafted input).  
-
-We can compare contents of both files by running:  
 ```bash
-./scripts/compare_program_counters.py log_files/stack-mission_riscv64_normal_mimic_payload.pc log_files/stack-mission_riscv64_compromised.pc --function-ranges log_files/stack-mission_riscv64_llvm_objdump_ranges.json
-```  
+python ./scripts/compare_classification_methods.py -n ./log_files/paper/csv/normal*.csv 
 
-![](./images/histogram.png)    
-![](./images/timeline.png)    
+# We can include the json file with function ranges if we wish (it does not affect detection methods, it is only supplied for plotting purposes)
+python ./scripts/compare_classification_methods.py -n ./log_files/paper/csv/normal*.csv --function-ranges ./log_files/paper/*json
+```
 
-So far only the "unique transitions" detection method is implemented. We can see its results by running:  
+# Input format
+Input csv files with baseline program data have two columns: program counters (in hexadecimal) and instruction types (strings). Example input file:
+```csv
+11FB2,addi
+11FB4,sd
+11FB6,sd
+11FB8,addi
+11FBA,mv
+11FBC,sd
+11FC0,sw
+11FC4,auipc
+11FC8,jalr
+...
+```
+
+Abnormal files are generated artificially by copying normal input files and modifying random sections (one section per file).   
+
+# Obtaining input files
+Input files may be obtained in various ways (e.g. running GDB). Input files from [./log\_files/paper/csv](./log_files/paper/csv) directory were obtained from Qemu emulator running CHERI-RISC-V, using `qtrace -u exec ./stack-mission` and then processing the collected trace log file (e.g. normal\_1.log) by running the following commands:  
+
 ```bash
-./scripts/compare_classification_methods.py --normal-pc log_files/stack-mission_riscv64_normal_mimic_payload.pc --abnormal-pc log_files/stack-mission_riscv64_compromised.pc  --function-ranges log_files/stack-mission_riscv64_llvm_objdump_ranges.json
-```  
+# Obtaining output of llvm-objdump of the stack-mission program.
+/tools/RISC-V/emulator/cheri/output/sdk/bin/llvm-objdump -sSD stack-mission > stack-mission-llvm-objdump.txt
 
-![](./images/unique_transitions.png)    
+# Extracting function ranges from the ".text" section of llvm-objdump output and storing it in json file.
+./extract_function_ranges_from_llvm_objdump.py stack-mission-llvm-objdump.txt -o stack-mission-function-ranges.json
 
-### Prerequisites
-python3 with pandas, numpy, matplotlib
+# Parsing the trace log using function ranges (to avoid any trace other than from the program itself, e.g. ignoring library code)
+./parse_qtrace_log normal_1.log --function-ranges stack-mission-function-ranges.json -o normal_1.csv
+```
 
-
-
-# Self reminder
-/tools/RISC-V/emulator/cheri/output/sdk/bin/llvm-objdump -sSD stack-mission_riscv64
-parser_simple.py stack-mission_riscv64_normal.log --max-pc 1000000 --llvm-objdump ../cheri-exercises/missions/uninitialized-stack-frame-control-flow/stack-mission_riscv64_llvm_objdump.output
