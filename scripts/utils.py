@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import re
 import os
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
+from tabulate import tabulate
 
 TITLE_SIZE = 20
 
@@ -663,7 +664,129 @@ def get_instruction_types(df):
 def substitute_instruction_names_by_ids(df, instruction_types):
     return df.applymap(lambda x: instruction_types.get(x,None))
 
+def enable_numerical_barchart_labels(axs):
+    ''' axs = matplotlib axes '''
+    for ax in axs:
+        for container in ax.containers:
+            # set numerical label on top of bar/rectangle
+            # import pdb; pdb.set_trace()
+            ax.bar_label(container)
+
+def float_to_concise_str(f):
+    ''' turns 0.0012345678 into 0.0012 '''
+    f = float(f)
+    if len(str(f).split('.')[1]) < 2 or f >= 1.0:
+        return str(round(f, 2))
+    return np.format_float_positional( float(f'{f:.2}'), trim='-')
+
+
+# copied from: https://matplotlib.org/3.1.0/gallery/lines_bars_and_markers/barchart.html
+def autolabel(rects, ax, xpos='center'):
+    """
+    Attach a text label above each bar in *rects*, displaying its height.
+
+    *xpos* indicates which side to place the text w.r.t. the center of
+    the bar. It can be one of the following {'center', 'right', 'left'}.
+    """
+
+    ha = {'center': 'center', 'right': 'left', 'left': 'right'}
+    offset = {'center': 0, 'right': 1, 'left': -1}
+
+    for rect in rects:
+        height = rect.get_height()
+        height_str = float_to_concise_str(height)
+        ax.annotate('{}'.format(height_str),
+                    xy=(rect.get_x() + rect.get_width() / 2, height),
+                    xytext=(offset[xpos]*3, 3),  # use 3 points offset
+                    textcoords="offset points",  # in both directions
+                    ha=ha[xpos], va='bottom')
+
+def plot_separate_figure_for_each_method(df_results_all):
+    for method_name in df_results_all['method_main_name'].unique():
+        df_results = df_results_all[df_results_all['method_main_name'] == method_name].copy()
+
+
+        x = np.arange(df_results.shape[0])  # the label locations
+        width = 0.35  # the width of the bars
+        fig, ax = plt.subplots()
+
+        rects1 = ax.bar(x - width/2, df_results['anomaly_recall'], width, label='Anomalies detected')
+        rects2 = ax.bar(x + width/2, df_results['false_positives_ratio'], width, label='False positives')
+
+        # Add some text for labels, title and custom x-axis tick labels, etc.
+        # ax.set_ylabel('Scores')
+        ax.set_title(method_name)
+        ax.set_xticks(x, df_results['window_size'])
+        ax.set_xlabel('Window size')
+        ax.legend(loc='center right', bbox_to_anchor=(1, 0.5))
+
+        # ax.bar_label(rects1, padding=3)
+        # ax.bar_label(rects2, padding=3)
+        autolabel(rects1, ax)
+        autolabel(rects2, ax)
+
+def plot_separate_figure_for_each_window(df_results_all):
+    results_columns_plot = ['anomaly_recall', 'false_positives_ratio'] 
+    for window_size in df_results_all['window_size'].unique():
+    # for window_size in window_sizes:
+        # axs = df_results[results_columns_plot].plot.bar(rot=15, subplots=True, title=f'Results (window_size={window_size})')
+        # axs = df_results_all[df_results_all.window_size == window_size][results_columns_plot].plot.bar(rot=15, subplots=True, title=f'Results all window sizes')
+        df_results = df_results_all[df_results_all.window_size == window_size][results_columns_plot + ['method_main_name']].copy()
+        df_results.index = df_results.pop('method_main_name')
+        ax = df_results.plot.bar(rot=15, title=f'Results (window size = {window_size})')
+        enable_numerical_barchart_labels([ax])
+
+def plot_results(df_results_all, conf=None):
+    results_columns_plot = ['anomaly_recall', 'false_positives_ratio'] 
+    if conf is None:
+        plot_separate_figure_for_each_method(df_results_all)
+        plt.show()
+    else:
+        # separate figure for each detection method
+        if conf['output'].getboolean('separate_figure_for_each_method'):
+            plot_separate_figure_for_each_method(df_results_all)
+            plt.show()
+        # separate figure for each window size
+        if conf['output'].getboolean('separate_figure_for_each_window'):
+            plot_separate_figure_for_each_window(df_results_all)
+        # single figure containing window sizes
+        if conf['output'].getboolean('single_figure_containing_all_window_sizes'):
+            ax = df_results_all[results_columns_plot].plot.bar(rot=15, title=f'Results all window sizes')
+            enable_numerical_barchart_labels([ax])
+    plt.show()
+
+def print_stats(df_stats):
+    ''' df_stats contains the number of normal/abnormal windows used for training/testing
+        for different windows sizes '''
+    logging.info(tabulate(df_stats, headers=['Window size']+df_stats.columns.values.tolist(), tablefmt='github'))
+    logging.info('')
+    logging.info(tabulate(df_stats, headers=['Window size']+df_stats.columns.values.tolist(), tablefmt='latex'))
+
+def plot_stats(df_stats):
+    fig, ax = plt.subplots() 
+    # ax.plot(df_stats.index, df_stats.index, label="Window size", marker='o')
+    ax.plot(df_stats.index, df_stats['Training normal'], label="Unique sequences", marker='o')
+    ax.set_xlabel('Window size')
+    ax.legend()
+
+    
+
+
 if __name__ == '__main__':
+    # print(float_to_concise_str(1.111111))
+    # print(float_to_concise_str(0.001234))
+    # print(float_to_concise_str(0.1))
+
+    x = pd.Series( np.random.randint(1, 3, 10000) )
+    counts = []
+    sizes = [3,6,12,25,50,75,100,125,150]
+    for window_size in sizes:
+        df = series_to_sliding_windows(x, window_size).drop_duplicates()
+        counts.append(df.shape[0])
+        print(window_size, df.shape[0])
+    plt.plot(sizes, counts)
+    plt.show()
+    exit()
     # print( sanitize_fname('abc.,(-):123') )
 
     # fname = '../log_files/stack-mission_riscv64_normal.pc'

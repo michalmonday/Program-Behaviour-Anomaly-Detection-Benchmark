@@ -57,6 +57,13 @@ parser.add_argument(
         )
 
 parser.add_argument(
+        '--plot-last-results',
+        required=False,
+        action='store_true',
+        help='Plots results from the last run of comparison program (results.csv)'
+        )
+
+parser.add_argument(
         '--use-unm-datasets',
         required=False,
         action='store_true',
@@ -145,6 +152,20 @@ import pandas as pd
 import warnings
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 import matplotlib.pyplot as plt
+plt.rc('font', 
+    **{
+    'family' : 'Times New Roman',
+    'weight' : 'bold',
+    'size'   : 12
+    })
+# plt.rcParams.update({
+#     "pgf.texsystem": "pdflatex",
+#     "pgf.preamble": "\n".join([
+#          r"\usepackage[utf8x]{inputenc}",
+#          r"\usepackage[T1]{fontenc}",
+#          r"\usepackage{cmbright}",
+#     ]),
+# })
 import matplotlib.ticker as ticker
 import sys
 import json
@@ -317,7 +338,15 @@ def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_v
 
 
 if __name__ == '__main__':
-
+    stats_path = os.path.join(this_file_dir, 'stats.csv') 
+    results_path = os.path.join(this_file_dir, 'results.csv') 
+    if args.plot_last_results:
+        df_stats = pd.read_csv(stats_path, index_col=0)
+        utils.print_stats(df_stats)
+        utils.plot_stats(df_stats)
+        df_results_all = pd.read_csv(results_path)
+        utils.plot_results(df_results_all, conf=conf)
+        exit()
     images_dir = os.path.join(this_file_dir, conf['output'].get('images_dir').strip())
 
     if args.quick_test:
@@ -326,7 +355,7 @@ if __name__ == '__main__':
         # conf['unique_transitions']['sequence_sizes'] = '2'
         conf['data']['window_sizes'] = '5'
         conf['data']['artificial_anomalies_offsets_count'] = '5'
-        conf['unique_transitions']['sequence_sizes'] = '15'
+        conf['N-grams']['sequence_sizes'] = '15'
         conf['lstm_autoencoder']['train_args'] = '"{"forest_size":3, "epochs":5}"'
 
     #########################################
@@ -432,18 +461,18 @@ if __name__ == '__main__':
             # values are classes (that inherit from Detection_Model class,
             #                     and must implement "train" and "predict", 
             #                     Detection_Model has a common evaluate_all method)
-            # 'unique_transitions'   : (Unique_Transitions, {}),
-            'isolation_forest'     : (Isolation_Forest, {'contamination':0.001}),
-            'one_class_svm'        : (OneClass_SVM, {'nu':0.1}),
-            # 'one_class_svm'        : (OneClass_SVM, {'nu':0.06}),
-            # 'one_class_svm'        : (OneClass_SVM, {'nu':0.03}),
-            # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'linear'}),
-            # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'poly'}),
-            # 'one_class_svm'        : (OneClass_SVM, {'kernel': 'rbf'}),
-            'one_class_svm'        : (OneClass_SVM, {'kernel': 'sigmoid'}),
-            'local_outlier_factor' : (Local_Outlier_Factor, {'contamination':0.001}),
+            'N-grams'   : (Unique_Transitions, {}),
+            'Isolation forest'     : (Isolation_Forest, {'contamination':0.001}),
+            'One class SVM'        : (OneClass_SVM, {'nu':0.1}),
+            # 'One class SVM'        : (OneClass_SVM, {'nu':0.06}),
+            # 'One class SVM'        : (OneClass_SVM, {'nu':0.03}),
+            # 'One class SVM'        : (OneClass_SVM, {'kernel': 'linear'}),
+            # 'One class SVM'        : (OneClass_SVM, {'kernel': 'poly'}),
+            # 'One class SVM'        : (OneClass_SVM, {'kernel': 'rbf'}),
+            'One class SVM'        : (OneClass_SVM, {'kernel': 'sigmoid'}),
+            'Local outlier factor' : (Local_Outlier_Factor, {'contamination':0.001})
             # 'lstm_autoencoder'     : (LSTM_Autoencoder, {})
-            'cnn'                  : (cnn_module.CNN, {'epochs':300})
+            # 'cnn'                  : (cnn_module.CNN, {'epochs':300})
             }
     # anomaly_detection_models = {}
 
@@ -452,8 +481,12 @@ if __name__ == '__main__':
     window_sizes = [int(ws) for ws in conf['data'].get('window_sizes').strip().split(',')]
     append_sliding_window_features = conf['data'].getboolean('append_features_to_sliding_windows')
     # for append_sliding_window_features in [True, False]:
-    df_results_all = {ws:pd.DataFrame(columns=Detection_Model.evaluation_metrics) for ws in window_sizes}
-    df_results_all_merged = pd.DataFrame(columns=Detection_Model.evaluation_metrics)
+        
+    results_columns = Detection_Model.evaluation_metrics + [
+        'training_time_ms', 'testing_time_ms',
+        'method_main_name', 'window_size', 'args_str'
+        ]
+    df_results_all = pd.DataFrame(columns=results_columns)
 
     # Preprocessing dataset.
     # Precompute artificial anomalous examples for those detection methods that use both types (normal + anomalous)
@@ -529,7 +562,8 @@ if __name__ == '__main__':
                 ]
         logging.debug('')
 
-    logging.info(tabulate(df_stats, headers=['Window size']+df_stats.columns.values.tolist(), tablefmt='github'))
+    utils.print_stats(df_stats)
+    df_stats.to_csv(stats_path)
 
     # Training, testing and evaluating different detection methods.
     
@@ -594,30 +628,19 @@ if __name__ == '__main__':
             logging.info( model.format_evaluation_metrics(em) )
             em['training_time_ms'] = int(training_time)
             em['testing_time_ms'] = int(testing_time)
-            df_results_all[window_size].loc[method_name] = em
-            df_results_all_merged.loc[method_name] = em
+            em['method_main_name'] = name
+            em['window_size'] = window_size
+            df_results_all.loc[method_name] = em
 
             if not not_detected.empty and conf['output'].getboolean('plot_not_detected_anomalies'):
                 fig, axs = utils.plot_undetected_regions(not_detected, df_a, pre_anomaly_values, anomalies_ranges, title=f'Undetected anomalies - {method_name}')
                 utils.save_figure(fig, method_name, images_dir)
 
-    # separate figure for each window size
-    if conf['output'].getboolean('separate_figure_for_each_window'):
-        for window_size, df_results in df_results_all.items():
-            axs = df_results[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results (window_size={window_size})')
-            for ax in axs:
-                for container in ax.containers:
-                    # set numerical label on top of bar/rectangle
-                    ax.bar_label(container)
+    # results_columns_plot = ['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms'] 
+    df_results_all.to_csv(results_path)
+    utils.plot_results(df_results_all, conf=conf)
 
-    # single figure containing window sizes
-    if conf['output'].getboolean('single_figure_containing_all_window_sizes'):
-        axs = df_results_all_merged[['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms']].plot.bar(rot=15, subplots=True, title=f'Results all window sizes')
-        for ax in axs:
-            for container in ax.containers:
-                # set numerical label on top of bar/rectangle
-                ax.bar_label(container)
-    plt.show()
+    # import pdb; pdb.set_trace()
 
         # if conf['conventional_machine_learning'].getboolean('active'):
         #     for window_size in window_sizes:

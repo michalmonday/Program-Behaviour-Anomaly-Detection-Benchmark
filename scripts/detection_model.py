@@ -13,9 +13,7 @@ from abc import ABC, abstractmethod
 class Detection_Model(ABC):
     evaluation_metrics = [
         'anomaly_recall', 'false_positives_ratio', 'anomaly_count', 
-        'detected_anomaly_count', 'non_anomaly_count', 'false_positives',
-        
-        'training_time_ms', 'testing_time_ms'
+        'detected_anomaly_count', 'non_anomaly_count', 'false_positives'
             ]
     
     def __init__(self):
