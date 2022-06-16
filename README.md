@@ -54,3 +54,73 @@ Input files may be obtained in various ways (e.g. running GDB). Input files from
 ### Example results
 
 ![image didnt show](./images/example_result.png)  
+
+
+
+## How to add a new detection method
+
+The best way to start is to copy and rename an already made method. We can copy `scripts/isolation\_forest`, rename the folder to `scripts/new_method`, then rename the python file inside the folder and the class name inside the python file. At this point the code inside the file will look like this:
+
+```python 
+# <bunch of unused imports>
+
+from detection_model import Detection_Model
+
+# all detection methods must inherit from the Detection_Model class (which provides evaluation consistency)
+class New_Method(Detection_Model):
+    def __init__(self, *args, **kwargs):
+        ''' We can initialize our detection method however we want, in this case 
+        it creates "model" member holding reference to IsolationForest from scikit-learn.
+        It isn't required to have "model" member name or any members at all being initialized. '''
+        self.model = IsolationForest(n_estimators=100, random_state=0, warm_start=True, *args, **kwargs)
+
+    def train(self, normal_windows, **kwargs):
+        # normal_windows is a 2D numpy array where each row contains input features of a single example
+        self.model.fit(normal_windows)
+
+    def predict(self, abnormal_windows):
+        ''' This method must return a list of boolean values, 
+        one for each row of "abnormal_windows" 2D numpy array. '''
+        # abnormal_windows is a 2D numpy array where each row contains input features of a single example
+        return [i==-1 for i in self.model.predict(abnormal_windows)]
+```
+
+After implementing custom logic inside `__init__`, `train`, and `predict`, we have to import the new method inside `compare_classification_methods.py` by adding the following line where other methods are imported:
+```python
+# FORMAT: from dir_name.python_file_name import class_name
+from isolation_forest.isolation_forest import Isolation_Forest
+from new_method.new_method import New_Method
+```
+
+Then inside `compare_classification_methods.py` we have add the new method to the `anomaly_detection_models` list:
+```python
+    anomaly_detection_models = {
+            # keys correspond to config file section names
+            # values are classes (that inherit from Detection_Model class,
+            #                     and must implement "train" and "predict", 
+            #                     Detection_Model has a common evaluate_all method)
+            'Isolation forest'     : (Isolation_Forest, {'contamination':0.001}),
+            'New method'           : (New_Method, {'constructor_kwarg1': 5.0, 'constructor_kwarg2': 'str_value'}),
+
+            # Notice that we can add more than one configurations of the same method:
+            'New method'           : (New_Method, {'constructor_kwarg1': 100.0, 'constructor_kwarg2': 'another_value'})
+            }
+```
+
+The last step is to add new section (with name corresponding to the key of `anomaly_detection_models` list above) in the configuration file (`compare_classification_methods_config.ini`):
+
+```ini
+[Isolation forest]
+train_using_abnormal_windows_too=False
+normalize_dataset=True
+
+[New method]
+train_using_abnormal_windows_too=False
+normalize_dataset=True
+```
+
+At this point the new detection method should be ready. When we run the comparison script, it will be trained, tested and included in plots.   
+
+
+
+
