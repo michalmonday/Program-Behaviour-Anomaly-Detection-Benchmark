@@ -59,7 +59,7 @@ Input files may be obtained in various ways (e.g. running GDB). Input files from
 
 ## How to add a new detection method
 
-The best way to start is to copy and rename an already made method. We can copy `scripts/isolation\_forest`, rename the folder to `scripts/new_method`, then rename the python file inside the folder (to `scripts/new_method/new_method.py`) and the class name inside the python file. At this point the code inside the file will look like this:
+The best way to start is to copy and rename an already implemented method. We can duplicate and rename `scripts/isolation_forest/isolation_forest.py` into `scripts/new_method/new_method.py`, and rename the class inside it into `New_Method`. At this point the code inside the file will look like this:
 
 ```python 
 # <bunch of unused imports>
