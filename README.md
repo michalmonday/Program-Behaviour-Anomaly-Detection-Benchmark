@@ -43,7 +43,7 @@ Input files may be obtained in various ways (e.g. running GDB). Input files from
 ./parse_qtrace_log normal_1.log --function-ranges stack-mission-function-ranges.json -o normal_1.csv
 ```
 
-![image didnt show](./images/overview.png)  
+![image didnt show](./images/main_diagram.png)  
 
 
 ### Preprocessing done by the comparison program
