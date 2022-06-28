@@ -20,6 +20,7 @@ class Artificial_Anomalies:
 
     @staticmethod
     def randomize_section(col, col_instr, instruction_types, section_size=None, offset=None):
+        print('shapes', col.shape, col_instr.shape)
         ''' Easy to detect
             Set random values within a section '''
         if section_size is None:
@@ -42,7 +43,11 @@ class Artificial_Anomalies:
             new_instr.append(random.choice(list(instruction_types.keys())))
 
         col[offset:offset+section_size] = new_values
-        col_instr[offset:offset+section_size] = new_instr
+        try:
+            col_instr[offset:offset+section_size] = new_instr
+        except Exception as e:
+            import pdb; pdb.set_trace()
+            print(e)
         col_ground_truth = __class__.generate_ground_truth_column(col, offset, section_size)
         return col, col_instr, anomalies_ranges, original_values, col_ground_truth
 
@@ -139,7 +144,7 @@ class Artificial_Anomalies:
             # (so the condition below improves performance)
             if iteration_size > (col.shape[0] // 2 + 1):
                 continue
-            col, col_instr, reduced_ranges, reduced_rows, first_iteration_ranges = __class__.reduce_loops_single_size(col, iteration_size, all_reduced_rows)
+            col, col_instr, reduced_ranges, reduced_rows, first_iteration_ranges = __class__.reduce_loops_single_size(col, col_instr, iteration_size, all_reduced_rows)
             # print(f'Size: {iteration_size}\ncol:\n{col}\nreduced_ranges:\n{reduced_ranges}\n')
             all_reduced_rows |= reduced_rows 
             # for i, r in enumerate(reduced_ranges):
@@ -152,18 +157,22 @@ class Artificial_Anomalies:
             all_first_iteration_ranges.extend(first_iteration_ranges)
             for start, end in first_iteration_ranges:
                 # print(f'start={start}, end={end}')
-                iend = gt.index.get_loc(end)
+                try:
+                    iend = gt.index.get_loc(end)
+                except Exception as e:
+                    import pdb; pdb.set_trace()
+                    print(e)
                 gt.iloc[iend:iend+2] = True # last program counter of first iteration and the following program counter
             for start, end in reduced_ranges:
                 # print('reduced_ranges:' ,start,end)
                 # gt[start:end][gt.isnull()] = False
                 
 
-                not_null_labels = gt[start:end][gt.notnull()]
-                if not_null_labels.shape[0] > 0:
-                    logging.debug(f'{not_null_labels.shape[0]} not null labels will be dropped')
-                    logging.debug(not_null_labels)
-                gt.drop(gt[start:end].index, inplace=True)
+                # not_null_labels = gt.loc[start:end][gt.notnull()]
+                # if not_null_labels.shape[0] > 0:
+                #     logging.debug(f'{not_null_labels.shape[0]} not null labels will be dropped')
+                #     logging.debug(not_null_labels)
+                gt.drop(gt.loc[start:end].index, inplace=True)
                 # logging.info(f'len(reduced_rows)={len(reduced_rows):<3} len(all_reduced_rows)={len(all_reduced_rows):<3} start={start:<3} end={end:<3} iteration_size={iteration_size:<3} col.shape[0]={col.shape[0]} orig_size_not_null={orig_size_not_null} discrepancy={orig_size_not_null - col[col.notnull()].shape[0] - len(all_reduced_rows)}')
             
         col_size = col[col.notnull()].shape[0] 
@@ -176,6 +185,7 @@ class Artificial_Anomalies:
         # print(f'len(all_first_iteration_ranges) = {len(all_first_iteration_ranges)}')
         gt = gt.reset_index(drop=True)
         col = col.reset_index(drop=True)
+        col_instr = col_instr.reset_index(drop=True)
         # import pdb; pdb.set_trace()
         return col, col_instr, sorted(all_first_iteration_ranges), sorted(all_reduced_ranges), gt
 
@@ -200,6 +210,9 @@ class Artificial_Anomalies:
                     rows_to_reduce = set(range(first,last+1))
                     if rows_to_reduce & reduced_rows:
                         continue
+                    # if 908 in rows_to_reduce:
+                    #     print('908 found')
+                    #     import pdb; pdb.set_trace()
                     repetition_ranges.append((first, last))
                     reduced_rows |= rows_to_reduce
                     # fir = first repetition range
@@ -212,7 +225,7 @@ class Artificial_Anomalies:
         return repetition_ranges, reduced_rows, first_iteration_ranges
 
     @staticmethod
-    def reduce_loops_single_size(col, col_instr, instruction_types, size, reduced_rows):
+    def reduce_loops_single_size(col, col_instr, size, reduced_rows):
         reduced_ranges, reduced_rows, first_iteration_ranges = __class__.get_repetition_ranges(col, size, reduced_rows)
         for first, last in reduced_ranges:
             col.drop(col.loc[first:last].index, inplace=True)
@@ -322,16 +335,19 @@ class Artificial_Anomalies:
             for j, column_name in enumerate(df_n):
                 new_column_name = column_name.replace('normal', f'reduced_loops', 1)
                 col, col_a_instr, first_iteration_ranges, reduced_ranges, col_a_ground_truth = __class__.reduce_loops(
-                        df_n[column_name],
-                        df_n_instr,
+                        df_n[column_name].copy(),
+                        df_n_instr[column_name].copy(),
                         instruction_types,
                         min_iteration_size=min_iteration_size
                         )
                 new_column = pd.Series([np.NaN]*df_n.shape[0])
+                new_column_instr = new_column.copy()
                 new_column[0:col.shape[0]] = col
+                new_column_instr[0:col.shape[0]] = col_a_instr
                 # logging.info(f'new_column: {new_column}')
                 # pav = pd.Series()
                 df_a[new_column_name] = new_column
+                df_a_instr[new_column_name] = new_column_instr
                 df_a_ground_truth[new_column_name] = col_a_ground_truth
                 pav = []
                 # TODO: append original values based on "col.probably_loc[reduced_range] for reduced_range in reduced_ranges"
