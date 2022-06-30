@@ -9,6 +9,8 @@ import os
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 from tabulate import tabulate
 
+from compare_classification_methods_GUI.file_load_status import FileLoadStatus
+
 TITLE_SIZE = 20
 
 def standardize_files_input(files_input):
@@ -95,7 +97,7 @@ def df_from_pc_files(f_list, column_prefix='', relative_pc=False, ignore_non_jum
     df = pd.DataFrame(all_pc, index=column_names).T
     return df
 
-def pc_and_inst_dfs_from_csv_files(f_list, column_prefix='', relative_pc=False, ignore_non_jumps=False, load_address=0):
+def pc_and_inst_dfs_from_csv_files(f_list, column_prefix='', relative_pc=False, ignore_non_jumps=False, load_address=0, file_loader_signals=None):
     ''' ".csv" files contain program counter and instruction type values
         collected from userspace program (e.g. using qtrace from Qemu emulator 
         running CHERI-RISC-V). '''
@@ -103,9 +105,13 @@ def pc_and_inst_dfs_from_csv_files(f_list, column_prefix='', relative_pc=False, 
     all_pc = []
     all_instr = []
     for f_name in f_list:
+        if file_loader_signals:
+            file_loader_signals.update_file_status.emit((f_name, FileLoadStatus.STARTED_LOADING.value))
         pc_chunk, instr_chunk = read_pc_and_instr_values(f_name, relative_pc=relative_pc, ignore_non_jumps=ignore_non_jumps, load_address=load_address) 
         all_pc.append(pc_chunk)
         all_instr.append(instr_chunk)
+        if file_loader_signals:
+            file_loader_signals.update_file_status.emit((f_name, FileLoadStatus.LOADED.value))
 
     column_names = [column_prefix + os.path.basename(f_name) for f_name in f_list]
     # df = pd.DataFrame(all_pc, dtype=np.int64, index=column_names).T
