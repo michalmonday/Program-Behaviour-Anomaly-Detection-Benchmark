@@ -225,7 +225,7 @@ def pc_and_instr_dfs_to_sliding_windows(df, df_instr, window_size, unique=False,
         df_instr = merge_pc_df_columns(df_instr)
         windows = series_to_sliding_windows(df['all_pc'], window_size)
         windows_instr = series_to_sliding_windows(df_instr['all_pc'], window_size)
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
     if append_features:
         windows = append_features_to_sliding_windows(windows)
 

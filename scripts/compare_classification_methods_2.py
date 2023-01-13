@@ -422,6 +422,7 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
         # Generate abnormal windows for testing (from previously loaded/generated "df_a" dataframe)
         logging.debug(f'... generating abnormal windows for testing')
         abnormal_windows_all_files_all_sizes[window_size] = [ utils.pc_and_instr_dfs_to_sliding_windows(df_a[[col_a]], df_a_instr_numeric[[col_a]], window_size=window_size, unique=False, append_features=append_sliding_window_features) for col_a in df_a ]
+        # import pdb; pdb.set_trace()
 
         logging.debug(f'... windowizing ground truth labels')
         df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
