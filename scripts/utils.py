@@ -225,6 +225,7 @@ def pc_and_instr_dfs_to_sliding_windows(df, df_instr, window_size, unique=False,
         df_instr = merge_pc_df_columns(df_instr)
         windows = series_to_sliding_windows(df['all_pc'], window_size)
         windows_instr = series_to_sliding_windows(df_instr['all_pc'], window_size)
+        import pdb; pdb.set_trace()
     if append_features:
         windows = append_features_to_sliding_windows(windows)
 
@@ -232,6 +233,20 @@ def pc_and_instr_dfs_to_sliding_windows(df, df_instr, window_size, unique=False,
     windows = windows.join(windows_instr, rsuffix='_instr')
     if unique:
         windows = windows.drop_duplicates()
+
+    # At this point windows look like this:
+    #           0       1       2       3      4      5      6        mean         std     min    max  jumps_count  mean_jump_size  0_instr  1_instr  2_instr  3_instr  4_instr  5_instr  6_instr
+    # 0        4.0    32.0     2.0     4.0 -124.0    2.0    2.0  -11.142857   50.949088  -124.0   32.0            4            78.0      8.0      0.0     14.0      8.0      0.0     14.0     13.0
+    # 1       32.0     2.0     4.0  -124.0    2.0    2.0  110.0    4.000000   68.818602  -124.0  110.0            4            98.0      0.0     14.0      8.0      0.0     14.0     13.0      7.0
+    # 2        2.0     4.0  -124.0     2.0    2.0  110.0    4.0    0.000000   67.724934  -124.0  110.0            4           117.0     14.0      8.0      0.0     14.0     13.0      7.0      9.0
+    # 3        4.0  -124.0     2.0     2.0  110.0    4.0    4.0    0.285714   67.738995  -124.0  110.0            4           117.0      8.0      0.0     14.0     13.0      7.0      9.0      7.0
+    # 4     -124.0     2.0     2.0   110.0    4.0    4.0  -50.0   -7.428571   70.272937  -124.0  110.0            4            98.5      0.0     14.0     13.0      7.0      9.0      7.0      9.0
+    # ...      ...     ...     ...     ...    ...    ...    ...         ...         ...     ...    ...          ...             ...      ...      ...      ...      ...      ...      ...      ...
+    # 2083    48.0     4.0     4.0 -1008.0    2.0    4.0 -182.0 -161.142857  380.739381 -1008.0   48.0            4           563.0      9.0     10.0      8.0      0.0     14.0      8.0      0.0
+    # 2084     4.0     4.0 -1008.0     2.0    4.0 -182.0    2.0 -167.714286  376.905697 -1008.0    4.0            4           598.0     10.0      8.0      0.0     14.0      8.0      0.0     14.0
+    # 2085     4.0 -1008.0     2.0     4.0 -182.0    2.0    4.0 -167.714286  376.905697 -1008.0    4.0            4           598.0      8.0      0.0     14.0      8.0      0.0     14.0      4.0
+    # 2086 -1008.0     2.0     4.0  -182.0    2.0    4.0   10.0 -166.857143  377.367826 -1008.0   10.0            4           346.5      0.0     14.0      8.0      0.0     14.0      4.0      9.0
+    # 2087     2.0     4.0  -182.0     2.0    4.0   10.0    2.0  -22.571429   70.358267  -182.0   10.0            4            96.0     14.0      8.0      0.0     14.0      4.0      9.0      9.0
 
     # # compute features like mean, std, min, max based only on program counters
     # features = compute_features_to_sliding_windows(windows) if append_features else {}
