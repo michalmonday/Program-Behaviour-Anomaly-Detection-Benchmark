@@ -75,31 +75,26 @@ def dfs_to_sliding_windows(dfs, window_size, unique=False, append_features=False
 
     for metric_name, df in dfs.items():
         df = merge_df_columns(df)
-        windows = series_to_sliding_windows(df['all_values'], window_size)
+        windows = series_to_sliding_windows(df['all_values'], window_size, suffix=f'_{metric_name}')
+
+        # TODO: possibly add check if metric name == 'pc' 
         if append_features:
-            windows = append_features_to_sliding_windows(windows)
+            windows = append_features_to_sliding_windows(windows, suffix=f'_{metric_name}')
         dfs_windows[metric_name] = windows
 
         # df_instr = merge_df_columns(df_instr)
         # windows = series_to_sliding_windows(df['all_values'], window_size)
         # windows_instr = series_to_sliding_windows(df_instr['all_values'], window_size)
     
+    windows = None
     for i, (metric_name, df) in enumerate(dfs_windows.items()):
         if i == 0:
-            widnows = df
-        windows = 
-    # include instructions in sliding windows (columns with instructions will have "_instr" in their names
-    windows = windows.join(windows_instr, rsuffix='_instr')
+            windows = df
+        # windows = windows.join(windows_instr, rsuffix=f'_{metric_name}')
+        else:
+            windows = windows.join(df)
     if unique:
         windows = windows.drop_duplicates()
-
-    # # compute features like mean, std, min, max based only on program counters
-    # features = compute_features_to_sliding_windows(windows) if append_features else {}
-    # # include previously computed features 
-    # for name, values in features.items():
-    #     windows[name] = values
-
-    # include instruction type ids in sliding windows
 
     convert_df_columns_to_strings(windows) # just to avoid "FutureWarning" in sklearn or pandas (can't remember which)
     return windows
@@ -221,10 +216,12 @@ def relative_from_absolute_pc(pc_collection):
 # different programs after they're stacked together 
 separator_value = 123456789
     
-def series_to_sliding_windows(series, window_size):
+def series_to_sliding_windows(series, window_size, suffix=None):
     ''' Series may include program counter values from multiple files,
         in such case these must be separated by the "separator_value" '''
     windows = pd.DataFrame( [ w.to_list() for w in series.rolling(window=window_size) if separator_value not in w.to_list() and len(w.to_list()) == window_size] )#.reshape(-1, window_size)
+    if suffix is not None:
+        windows = windows.add_suffix(suffix)
     return windows
 
 
@@ -298,7 +295,8 @@ def pc_and_instr_dfs_to_sliding_windows(df, df_instr, window_size, unique=False,
     convert_df_columns_to_strings(windows) # just to avoid "FutureWarning" in sklearn or pandas (can't remember which)
     return windows
 
-def append_features_to_sliding_windows(windows):
+def append_features_to_sliding_windows(windows, suffix=''):
+    # import pdb; pdb.set_trace()
     # generate features first before including them in the dataframe
     mean = windows.mean(axis=1)
     std = windows.std(axis=1)
@@ -313,12 +311,12 @@ def append_features_to_sliding_windows(windows):
     except:
         mean_jump_size = 0
     # include features
-    windows['mean'] = mean
-    windows['std'] = std
-    windows['min'] = min_
-    windows['max'] = max_
-    windows['jumps_count'] = jumps_count
-    windows['mean_jump_size'] = mean_jump_size
+    windows['mean' + suffix] = mean
+    windows['std' + suffix] = std
+    windows['min' + suffix] = min_
+    windows['max' + suffix] = max_
+    windows['jumps_count' + suffix] = jumps_count
+    windows['mean_jump_size' + suffix] = mean_jump_size
     windows.fillna(0, inplace=True) # mean_jump_size may be NaN in case of system calls...
     return windows
 

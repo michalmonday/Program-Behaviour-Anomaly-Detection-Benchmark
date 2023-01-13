@@ -259,7 +259,6 @@ def generate_artificial_anomalies_from_training_dataset(anomalies_per_normal_fil
             # df_n_instr,
             dfs_n,
             instruction_types,
-
             anomalies_per_normal_file, # how many anomalies to create per normal file * anomaly methods
             reduce_loops = reduce_loops,
             min_iteration_size = reduce_loops_min_iteration_size,
@@ -270,7 +269,7 @@ def generate_artificial_anomalies_from_training_dataset(anomalies_per_normal_fil
             # min_iteration_size = conf['data'].getint('artificial_anomalies_reduce_loops_min_iteration_size')
             )
     # df_a_instr_numeric = utils.substitute_instruction_names_by_ids(df_a_instr, instruction_types)
-    logging.info(f'Number of abnormal pc files: {dfs_a['pc'].shape[1]} (each having a single anomaly, consisting of multiple program counter values)')
+    logging.info(f'Number of abnormal pc files: {dfs_a["pc"].shape[1]} (each having a single anomaly, consisting of multiple program counter values)')
 
     if conf['output'].getboolean('store_csvs_for_external_testing'):
         logging.info('Storing csvs for external testing')
@@ -375,7 +374,6 @@ abnormal_files_training_size = None
 artificial_training_windows_all_sizes = {} # key = window size, value = windows dataframe
 normal_windows_all_sizes = {} # key = window size, value = normal window dataframe
 abnormal_windows_all_files_all_sizes = {} # key = window size, value = abnormal windows for all files
-abnormal_windows_all_files_all_sizes = {} # key = window size, value = abnormal windows for all files
 df_a_ground_truth_windowized_all_sizes = {} # key = window size, value = ground truth labels for the testing dataset
 
 def clear_dicts():
@@ -385,9 +383,11 @@ def clear_dicts():
         dict_.clear()
 
 def generate_sliding_windows(window_sizes_, append_sliding_window_features, file_loader_signals=None):
-    global window_sizes
+    global window_sizes, dfs_a, dfs_n
     clear_dicts()
     window_sizes = window_sizes_
+
+    import pdb; pdb.set_trace()
 
     # abnormal_files_training_size = int(df_a.shape[1] * conf['models_that_train_with_abnormal_examples'].getfloat('abnormal_examples_training_split'))
     abnormal_files_training_size = int(dfs_a['pc'].shape[1] * conf['models_that_train_with_abnormal_examples'].getfloat('abnormal_examples_training_split'))
@@ -411,38 +411,45 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
                 unique=True,
                 append_features=append_sliding_window_features
                 )
-        normal_windows_all_sizes[window_size] = normal_windows
         # import pdb; pdb.set_trace()
 
+        normal_windows_all_sizes[window_size] = normal_windows
+
         # Introduce anomalies just for training
-        logging.debug(f'... generating anomalies')
-        df_a_artificial, df_a_instr_artificial, _, _, _ = Artificial_Anomalies.generate(
-                    df_n,
-                    df_n_instr,
-                    instruction_types,
-                    abnormal_files_training_size, # how many program runs to generate (each having one anomaly)
-                    reduce_loops = False
-                    )
-        logging.debug(f'... substituting instruction names')
-        df_a_instr_artificial_numeric = utils.substitute_instruction_names_by_ids(df_a_instr_artificial, instruction_types)
-        # Generate abnormal windows for training
-        logging.debug(f'... generating abnormal windows for training')
-        abnormal_windows = utils.pc_and_instr_dfs_to_sliding_windows(
-                df_a_artificial,
-                df_a_instr_artificial_numeric,
-                window_size=window_size,
-                unique=True,
-                append_features=append_sliding_window_features
-                )
-        # Remove normal_windows from abnormal_windows because programs with abnormalities contain normal windows as well,
-        # unless we remove them just like it's done here.
-        logging.debug(f'... removing normal windows from abnormal ones')
-        abnormal_windows = abnormal_windows.merge(normal_windows, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
-        artificial_training_windows_all_sizes[window_size] = abnormal_windows
+        # logging.debug(f'... generating anomalies')
+        # # df_a_artificial, df_a_instr_artificial, _, _, _ = Artificial_Anomalies.generate(
+        # dfs_a, _, _, _ = Artificial_Anomalies.generate(
+        #             dfs_n,
+        #             # df_n,
+        #             # df_n_instr,
+        #             instruction_types,
+        #             abnormal_files_training_size, # how many program runs to generate (each having one anomaly)
+        #             reduce_loops = False
+        #             )
+        # logging.debug(f'... substituting instruction names')
+        # # df_a_instr_artificial_numeric = utils.substitute_instruction_names_by_ids(df_a_instr_artificial, instruction_types)
+        # dfs_a['instr_name_ids'] = utils.substitute_instruction_names_by_ids(dfs_a['instr_names'], instruction_types)
+        # # Generate abnormal windows for training
+        # logging.debug(f'... generating abnormal windows for training')
+        # # abnormal_windows = utils.pc_and_instr_dfs_to_sliding_windows(
+        # abnormal_windows = utils.dfs_to_sliding_windows(
+        #         dfs_a,
+        #         # df_a_artificial,
+        #         # df_a_instr_artificial_numeric,
+        #         window_size=window_size,
+        #         unique=True,
+        #         append_features=append_sliding_window_features
+        #         )
+        # # Remove normal_windows from abnormal_windows because programs with abnormalities contain normal windows as well,
+        # # unless we remove them just like it's done here.
+        # logging.debug(f'... removing normal windows from abnormal ones')
+        # abnormal_windows = abnormal_windows.merge(normal_windows, how='left', indicator=True).loc[lambda x: x['_merge']=='left_only'].drop(columns=['_merge'])
+        # artificial_training_windows_all_sizes[window_size] = abnormal_windows
 
         # Generate abnormal windows for testing (from previously loaded/generated "df_a" dataframe)
         logging.debug(f'... generating abnormal windows for testing')
-        abnormal_windows_all_files_all_sizes[window_size] = [ utils.pc_and_instr_dfs_to_sliding_windows(df_a[[col_a]], df_a_instr_numeric[[col_a]], window_size=window_size, unique=False, append_features=append_sliding_window_features) for col_a in df_a ]
+        # abnormal_windows_all_files_all_sizes[window_size] = [ utils.pc_and_instr_dfs_to_sliding_windows(df_a[[col_a]], df_a_instr_numeric[[col_a]], window_size=window_size, unique=False, append_features=append_sliding_window_features) for col_a in df_a ]
+        abnormal_windows_all_files_all_sizes[window_size] = [ utils.dfs_to_sliding_windows(dfs_a, window_size=window_size, unique=False, append_features=append_sliding_window_features) for col_a in dfs_a ]
 
         logging.debug(f'... windowizing ground truth labels')
         df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(

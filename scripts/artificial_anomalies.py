@@ -3,6 +3,7 @@ import numpy as np
 import random
 import utils
 import logging
+from copy import deepcopy
 
 from compare_classification_methods_GUI.file_load_status import FileLoadStatus
 
@@ -53,6 +54,7 @@ class Artificial_Anomalies:
         return col, col_instr, anomalies_ranges, original_values, col_ground_truth
 
 
+    # TODO: adapt for more inputs than just pc and instr
     @staticmethod 
     def slightly_randomize_section(col, col_instr, instruction_types, section_size=None, offset=None):
         ''' Harder to detect
@@ -76,6 +78,7 @@ class Artificial_Anomalies:
         return col, col_instr, anomalies_ranges, original_values, col_ground_truth
 
 
+    # TODO: adapt for more inputs than just pc and instr
     @staticmethod
     def minimal(col, col_instr, instruction_types, offset=None):
         ''' Hard to detect.
@@ -122,6 +125,7 @@ class Artificial_Anomalies:
     #                 logging.error(e)
     #                 import pdb; pdb.set_trace()
 
+    # TODO: adapt for more inputs than just pc and instr
     @staticmethod
     def reduce_loops(col, col_instr, instruction_types, min_iteration_size=2):
         ''' It must return col_ground_truth.
@@ -225,6 +229,7 @@ class Artificial_Anomalies:
                         first_iteration_ranges.append(fir)
         return repetition_ranges, reduced_rows, first_iteration_ranges
 
+    # TODO: adapt for more inputs than just pc and instr
     @staticmethod
     def reduce_loops_single_size(col, col_instr, size, reduced_rows):
         reduced_ranges, reduced_rows, first_iteration_ranges = __class__.get_repetition_ranges(col, size, reduced_rows)
@@ -260,6 +265,7 @@ class Artificial_Anomalies:
     def generate_random_section_size(col):
         min_size = 10
         max_size = min(50, col.shape[0]-2)
+        assert max_size >= min_size, f'max_size={max_size} min_size={min_size}'
         return random.randint(min_size, max_size)
 
     # @staticmethod
@@ -283,7 +289,8 @@ class Artificial_Anomalies:
 
 
     @staticmethod
-    def generate(df_n, df_n_instr, instruction_types, offsets_count, anomaly_methods=[], reduce_loops=True, min_iteration_size=50, f_names=[], file_loader_signals=None):
+    # def generate(df_n, df_n_instr, instruction_types, offsets_count, anomaly_methods=[], reduce_loops=True, min_iteration_size=50, f_names=[], file_loader_signals=None):
+    def generate(dfs_n, instruction_types, offsets_count, anomaly_methods=[], reduce_loops=True, min_iteration_size=50, f_names=[], file_loader_signals=None):
         '''  
         min_iteration_size is used only for loop reducing anomalies
         return_anomalies_only=True can be used to avoid returning the whole program counter dataframes 
@@ -297,9 +304,10 @@ class Artificial_Anomalies:
                 # Artificial_Anomalies.minimal
                 ]
         anomalies_ranges = []
-        pre_anomaly_values = []
-        df_a = pd.DataFrame()
-        df_a_instr = pd.DataFrame()
+        pre_anomaly_pc_values = []
+        dfs_a = {}
+        # df_a = pd.DataFrame()
+        # df_a_instr = pd.DataFrame()
         df_a_ground_truth = pd.DataFrame(dtype=bool)
         # Introduce artificial anomalies for all the files, resulting in the following testing examples:
         # - method 1 with file 1
@@ -314,61 +322,91 @@ class Artificial_Anomalies:
         # Example above shows only 3 methods and 2 files, but the principle applies for any number.
         # So with 5 methods and 5 normal pc files there would be 25 testing examples.
 
+        # df_n used to be something like this (containing relative program counters):
+        #      normal: normal_1.csv  normal: normal_2.csv  normal: normal_3.csv
+        # 0                     4.0                   4.0                   4.0
+        # 1                    32.0                  32.0                  32.0
+        # 2                     2.0                   2.0                   2.0
+        # 3                     4.0                   4.0                   4.0
+        # 4                  -124.0                -124.0                -124.0
+        # ..                    ...                   ...                   ...
+        # 970                -182.0                   NaN                   NaN
+        # 971                   2.0                   NaN                   NaN
+        # 972                   4.0                   NaN                   NaN
+        # 973                  10.0                   NaN                   NaN
+        # 974                   2.0                   NaN                   NaN
+        # 
+        # now the same can be accessed by dfs_n['pc']
+
         for i, method in enumerate(anomaly_methods):
             # for each normal/baseline append column with introduced anomalies into into "df_a"
-            for j, column_name in enumerate(df_n):
+            for j, col_name in enumerate(dfs_n['pc'].columns):
+                # col_name is based on the file name (e.g. "normal: stack-mission_normal_1.pc" or "normal: normal_1.pc")
                 if file_loader_signals:
                     file_loader_signals.update_file_status.emit((f_names[j], FileLoadStatus.STARTED_GENERATING_ANOMALIES.value))
                 for k in range(offsets_count):
                     # introduce anomalies
-                    col_a, col_a_instr, ar, pav, col_a_ground_truth = method(df_n[column_name].copy(), df_n_instr[column_name].copy(), instruction_types)
+
+                    # section_size = __class__.generate_random_section_size(df_n[col_name])
+                    # offset = __class__.generate_random_offset(df_n[col_name], section_size)
+                    col_a, col_a_instr, ar, pav, col_a_ground_truth = method(dfs_n['pc'][col_name].copy(), dfs_n['instr'][col_name].copy(), instruction_types) #, section_size=section_size, offset=offset)
                     # keep record of anomalies and previous values (for plotting later)
                     anomalies_ranges.append(ar)
-                    pre_anomaly_values.append(pav)
+                    pre_anomaly_pc_values.append(pav)
                     # rename column
-                    new_column_name = column_name.replace('normal', f'{method.__name__}_({i},{j},{k})', 1)
-                    df_a[new_column_name] = col_a
-                    df_a_instr[new_column_name] = col_a_instr
-                    df_a_ground_truth[new_column_name] = col_a_ground_truth
+                    new_col_name = col_name.replace('normal', f'{method.__name__}_({i},{j},{k})', 1)
+                    for metric_name in dfs_n.keys():
+                        if metric_name not in dfs_a:
+                            dfs_a[metric_name] = pd.DataFrame()
+                        if metric_name == 'pc':
+                            dfs_a['pc'][new_col_name] = col_a
+                        elif metric_name == 'instr':
+                            dfs_a['instr'][new_col_name] = col_a_instr
+                        else:
+                            dfs_a[metric_name][new_col_name] = dfs_n[metric_name][col_name]
+                    # df_a[new_col_name] = col_a
+                    # df_a_instr[new_col_name] = col_a_instr
+                    df_a_ground_truth[new_col_name] = col_a_ground_truth
                 if file_loader_signals:
                     file_loader_signals.update_file_status.emit((f_names[j], FileLoadStatus.ANOMALIES_GENERATED.value))
 
-        # REDUCE LOOPS
-        # Reducing loops can't be very randomized so it's done after all other 
-        # anomalies are introduced (where program counter values are randomized).
-        if reduce_loops:
-            for j, column_name in enumerate(df_n):
-                if file_loader_signals:
-                    file_loader_signals.update_file_status.emit((f_names[j], FileLoadStatus.STARTED_REDUCING_LOOPS.value))
-                new_column_name = column_name.replace('normal', f'reduced_loops', 1)
-                col, col_a_instr, first_iteration_ranges, reduced_ranges, col_a_ground_truth = __class__.reduce_loops(
-                        df_n[column_name].copy(),
-                        df_n_instr[column_name].copy(),
-                        instruction_types,
-                        min_iteration_size=min_iteration_size
-                        )
-                new_column = pd.Series([np.NaN]*df_n.shape[0])
-                new_column_instr = new_column.copy()
-                new_column[0:col.shape[0]] = col
-                new_column_instr[0:col.shape[0]] = col_a_instr
-                # logging.info(f'new_column: {new_column}')
-                # pav = pd.Series()
-                df_a[new_column_name] = new_column
-                df_a_instr[new_column_name] = new_column_instr
-                df_a_ground_truth[new_column_name] = col_a_ground_truth
-                pav = []
-                # TODO: append original values based on "col.probably_loc[reduced_range] for reduced_range in reduced_ranges"
-                for r in sorted(reduced_ranges):
-                    # pav = pav.combine(col.loc[r[0]:r[1]], max, fill_value=-1)
-                    pav.append(df_n[column_name].loc[r[0]:r[1]].copy())
-                # specific_values=[True] will return anomaly ranges only
-                ar = utils.get_same_consecutive_values_ranges(col_a_ground_truth, specific_values=[True])
-                pre_anomaly_values.append(pav)
-                anomalies_ranges.append(ar)
-                if file_loader_signals:
-                    file_loader_signals.update_file_status.emit((f_names[j], FileLoadStatus.REDUCED_LOOPS.value))
+        # # REDUCE LOOPS
+        # # Reducing loops can't be very randomized so it's done after all other 
+        # # anomalies are introduced (where program counter values are randomized).
+        # if reduce_loops:
+        #     for j, column_name in enumerate(df_n):
+        #         if file_loader_signals:
+        #             file_loader_signals.update_file_status.emit((f_names[j], FileLoadStatus.STARTED_REDUCING_LOOPS.value))
+        #         new_column_name = column_name.replace('normal', f'reduced_loops', 1)
+        #         col, col_a_instr, first_iteration_ranges, reduced_ranges, col_a_ground_truth = __class__.reduce_loops(
+        #                 df_n[column_name].copy(),
+        #                 df_n_instr[column_name].copy(),
+        #                 instruction_types,
+        #                 min_iteration_size=min_iteration_size
+        #                 )
+        #         new_column = pd.Series([np.NaN]*df_n.shape[0])
+        #         new_column_instr = new_column.copy()
+        #         new_column[0:col.shape[0]] = col
+        #         new_column_instr[0:col.shape[0]] = col_a_instr
+        #         # logging.info(f'new_column: {new_column}')
+        #         # pav = pd.Series()
+        #         df_a[new_column_name] = new_column
+        #         df_a_instr[new_column_name] = new_column_instr
+        #         df_a_ground_truth[new_column_name] = col_a_ground_truth
+        #         pav = []
+        #         # TODO: append original values based on "col.probably_loc[reduced_range] for reduced_range in reduced_ranges"
+        #         for r in sorted(reduced_ranges):
+        #             # pav = pav.combine(col.loc[r[0]:r[1]], max, fill_value=-1)
+        #             pav.append(df_n[column_name].loc[r[0]:r[1]].copy())
+        #         # specific_values=[True] will return anomaly ranges only
+        #         ar = utils.get_same_consecutive_values_ranges(col_a_ground_truth, specific_values=[True])
+        #         pre_anomaly_pc_values.append(pav)
+        #         anomalies_ranges.append(ar)
+        #         if file_loader_signals:
+        #             file_loader_signals.update_file_status.emit((f_names[j], FileLoadStatus.REDUCED_LOOPS.value))
 
-        return df_a, df_a_instr, df_a_ground_truth, anomalies_ranges, pre_anomaly_values
+        # return df_a, df_a_instr, df_a_ground_truth, anomalies_ranges, pre_anomaly_pc_values
+        return dfs_a, df_a_ground_truth, anomalies_ranges, pre_anomaly_pc_values
 
 # Testing code
 if __name__ == '__main__':
