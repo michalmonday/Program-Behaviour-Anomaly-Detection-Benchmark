@@ -33,31 +33,95 @@ def hexify_y_axis(ax):
 def hexify_x_axis(ax):
     ax.get_xaxis().set_major_formatter(lambda x,pos: hex(int(x)))
 
-def read_pc_values(f_name, relative_pc=False, ignore_non_jumps=False, load_address=0):
-    with open(f_name) as f:
-        pcs = [int(line.strip(), 16) + load_address for line in f.readlines() if line]
-
-    # IGNORE_NON_JUMP AND RELATIVE_PC OPTIONS COMBINED TOGETHER CREATE 
-    # THE QUESTION: SHOULD RELATIVE PC BE RELATIVE TO ANY LAST PC OR THE LAST 
-    # NON-JUMP PC
+def read_csv_file(f_name, relative_pc=False, ignore_non_jumps=False, load_address=0):
+    hex_to_dec = lambda x: int(x,16)
+    df = pd.read_csv(f_name, converters={'pc': hex_to_dec, 'instr': hex_to_dec})
     if relative_pc:
-        pcs = relative_from_absolute_pc(pcs)
+        df['pc'] = df['pc'].diff().fillna(0)
+    return df
 
-    if ignore_non_jumps:
-        threshold = 4
-        # [0] is inserted at the begining of relative pcs so the length matches
-        rel_pcs = [0] + relative_from_absolute_pc(pcs)
-        indices_to_keep = set()
-        for i, rel_pc in enumerate(rel_pcs[:-1]):
-            if abs(int(rel_pc)) > threshold:
-                indices_to_keep.add(i)
-            if abs(int(rel_pcs[i+1])) > threshold:
-                indices_to_keep.add(i)
-                indices_to_keep.add(i+1)
-        return [pcs[i] for i in sorted(indices_to_keep)]
-        # rel_pcs = [0] + relative_from_absolute_pc(pcs)
-        # return [pc for pc,rel_pc in zip(pcs, rel_pcs) if abs(int(rel_pc)) > 4]
-    return pcs
+def dfs_from_csv_files(f_list, column_prefix='', relative_pc=False, ignore_non_jumps=False, load_address=0, file_loader_signals=None):
+    ''' ".csv" files containining collected program metrics (e.g. program counter and instructions, clock cycles, etc.)'''
+    f_list = standardize_files_input(f_list)
+    all_values = {}
+    file_dfs = {}
+    for f_name in f_list:
+        if file_loader_signals:
+            file_loader_signals.update_file_status.emit((f_name, FileLoadStatus.STARTED_LOADING.value))
+        file_dfs[f_name] = read_csv_file(f_name, relative_pc=relative_pc, ignore_non_jumps=ignore_non_jumps, load_address=load_address) 
+        if file_loader_signals:
+            file_loader_signals.update_file_status.emit((f_name, FileLoadStatus.LOADED.value))
+
+    new_column_names = [column_prefix + os.path.basename(f_name) for f_name in f_list]
+    # df = pd.DataFrame(all_pc, dtype=np.int64, index=column_names).T
+
+    # each df contains values of specific metric, where each column is a different file
+    dfs = {}
+    metric_names = file_dfs[ list(file_dfs.keys())[0] ].columns.tolist()
+    for metric_name in metric_names:
+        dfs[metric_name] = pd.DataFrame({new_column_names[i]: file_dfs[f_name][metric_name] for i, f_name in enumerate(f_list)})
+    # df_pc = pd.DataFrame(all_pc, index=column_names).T
+    # df_instr = pd.DataFrame(all_instr, index=column_names).T
+    return dfs
+
+def dfs_to_sliding_windows(dfs, window_size, unique=False, append_features=False):
+    ''' df contains a column per each ".pc" file where each cell is a program counter value.  '''
+    # each df in dictionary below will store windows of a single metric
+    dfs_windows = {}
+    if type(dfs) == pd.core.series.Series or type(dfs) == pd.core.frame.DataFrame:
+        raise Exception('dfs should be a dictionary of dataframes, not a Series or dataframe')
+        # windows = series_to_sliding_windows(df, window_size)
+        # windows_instr = series_to_sliding_windows(df_instr, window_size)
+
+    for metric_name, df in dfs.items():
+        df = merge_df_columns(df)
+        windows = series_to_sliding_windows(df['all_values'], window_size)
+        if append_features:
+            windows = append_features_to_sliding_windows(windows)
+        dfs_windows[metric_name] = windows
+
+        # df_instr = merge_df_columns(df_instr)
+        # windows = series_to_sliding_windows(df['all_values'], window_size)
+        # windows_instr = series_to_sliding_windows(df_instr['all_values'], window_size)
+    
+    for i, (metric_name, df) in enumerate(dfs_windows.items()):
+        if i == 0:
+            widnows = df
+        windows = 
+    # include instructions in sliding windows (columns with instructions will have "_instr" in their names
+    windows = windows.join(windows_instr, rsuffix='_instr')
+    if unique:
+        windows = windows.drop_duplicates()
+
+    # # compute features like mean, std, min, max based only on program counters
+    # features = compute_features_to_sliding_windows(windows) if append_features else {}
+    # # include previously computed features 
+    # for name, values in features.items():
+    #     windows[name] = values
+
+    # include instruction type ids in sliding windows
+
+    convert_df_columns_to_strings(windows) # just to avoid "FutureWarning" in sklearn or pandas (can't remember which)
+    return windows
+
+def merge_df_columns(df):
+    ''' Creates df with "all_values" column that contains program counters from 
+        multiple files (columns), separated by the "separator_value" '''
+    # add separator_value row to each column (to avoid recognizing the last PC of 1 run as first PC of 2nd run)
+    # df = df.append(pd.Series(), ignore_index=True)
+
+    # it's sad but the concat line below just appends a single row
+    df = pd.concat([
+        df,
+        pd.DataFrame([[separator_value]*df.shape[1]], 
+            index=[df.shape[0]],
+            dtype=df.values.dtype,
+            columns=df.columns)
+        ])
+    # stack all columns on top of each other
+    df = df.melt(value_name='all_values').drop('variable', axis=1)
+    df = df.dropna()
+    return df
 
 def read_pc_and_instr_values(f_name, relative_pc=False, ignore_non_jumps=False, load_address=0):
     # with open(f_name) as f:
@@ -81,21 +145,10 @@ def read_pc_and_instr_values(f_name, relative_pc=False, ignore_non_jumps=False, 
         return df[0].iloc[indices_to_keep].tolist(), df[1].iloc[indices_to_keep].tolist()
     return df[0].tolist(), df[1].tolist()
 
-
-def df_from_pc_files(f_list, column_prefix='', relative_pc=False, ignore_non_jumps=False, load_address=0):
-    ''' ".pc" files contain '\n'-separated hexadecimal program counter values
-        collected from userspace program (e.g. using qtrace from Qemu emulator 
-        running CHERI-RISC-V). '''
-    f_list = standardize_files_input(f_list)
-    all_pc = []
-    for f_name in f_list:
-        pc_chunk = read_pc_values(f_name, relative_pc=relative_pc, ignore_non_jumps=ignore_non_jumps, load_address=load_address) 
-        all_pc.append(pc_chunk)
-
-    column_names = [column_prefix + os.path.basename(f_name) for f_name in f_list]
-    # df = pd.DataFrame(all_pc, dtype=np.int64, index=column_names).T
-    df = pd.DataFrame(all_pc, index=column_names).T
-    return df
+def read_pc_values():
+    pass
+def df_from_pc_files():
+    pass
 
 def pc_and_inst_dfs_from_csv_files(f_list, column_prefix='', relative_pc=False, ignore_non_jumps=False, load_address=0, file_loader_signals=None):
     ''' ".csv" files contain program counter and instruction type values
@@ -173,6 +226,7 @@ def series_to_sliding_windows(series, window_size):
         in such case these must be separated by the "separator_value" '''
     windows = pd.DataFrame( [ w.to_list() for w in series.rolling(window=window_size) if separator_value not in w.to_list() and len(w.to_list()) == window_size] )#.reshape(-1, window_size)
     return windows
+
 
 def merge_pc_df_columns(df):
     ''' Creates df with "all_pc" column that contains program counters from 
@@ -659,12 +713,15 @@ def get_instruction_types(df):
 
         Example return: {'addi': 0, 'auipc': 1, 'beq': 2, 'bgt': 3, 'bgtu': 4, 'ble': 5, 'bne': 6, 'j': 7, 'jalr': 8, 'ld': 9, 'lui': 10, 'lw': 11, 'mv: 12, 'ret': 13, 'sd': 14, 'slli': 15, 'snez': 16, 'sw': 17}
     '''
-    instructions = set()
-    for col in df:
-        instructions |= set(df[col].unique())
+    # instructions = set()
+    # for col in df:
+    #     instructions |= set(df[col].unique())
+    instructions = pd.unique(df.values.ravel('K')).tolist()
     if None in instructions:
         instructions.remove(None)
-    instructions = list(sorted(instructions))
+    if np.NaN in instructions:
+        instructions.remove(np.NaN)
+    instructions = sorted(instructions)
     return {instr:i for i,instr in enumerate(instructions)}
 
 def substitute_instruction_names_by_ids(df, instruction_types):

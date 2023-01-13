@@ -108,7 +108,7 @@ from tabulate import tabulate
 import pathlib
 
 import utils
-from utils import read_pc_values, plot_pc_histogram, plot_pc_timeline, df_from_pc_files, plot_vspans, plot_vspans_ranges, print_config
+from utils import plot_pc_histogram, plot_pc_timeline, plot_vspans, plot_vspans_ranges, print_config
 from artificial_anomalies import Artificial_Anomalies
 from lstm_autoencoder import lstm_autoencoder
 from lstm_autoencoder.lstm_autoencoder import LSTM_Autoencoder
@@ -204,12 +204,15 @@ function_ranges = json.load(args.function_ranges) if args.function_ranges else {
 # Load program counter values from files
 logging.info('Reading and preprocessing normal pc files.')
 
-df_n = None
-df_n_instr = None
-df_n_instr_numeric = None
-df_a = None
-df_a_instr = None
-df_a_instr_numeric = None
+
+dfs_n = None
+dfs_a = None
+# df_n = None
+# df_n_instr = None
+# df_n_instr_numeric = None
+# df_a = None
+# df_a_instr = None
+# df_a_instr_numeric = None
 df_a_ground_truth = None
 anomalies_ranges = []
 pre_anomaly_values = []
@@ -218,31 +221,43 @@ window_sizes = None
 normal_fnames = None
 
 def load_and_preprocess_input_files(f_names, relative_pc=True, ignore_non_jumps=True, file_loader_signals=None):
-    global df_n, df_n_instr, instruction_types, df_n_instr_numeric, normal_fnames
+    # global df_n, df_n_instr, instruction_types, df_n_instr_numeric, normal_fnames
+    global dfs_n, instruction_types, normal_fnames
     normal_fnames = f_names
-    df_n, df_n_instr = utils.pc_and_inst_dfs_from_csv_files(
-    # df_n = df_from_pc_files(
+    dfs_n = utils.dfs_from_csv_files(
             f_names, 
             column_prefix    = 'normal: ',
             relative_pc      = conf['data'].getboolean('relative_pc'),
             ignore_non_jumps = conf['data'].getboolean('ignore_non_jumps'),
             file_loader_signals = file_loader_signals
-            )
-    instruction_types = utils.get_instruction_types(df_n_instr)
-    df_n_instr_numeric = utils.substitute_instruction_names_by_ids(df_n_instr, instruction_types)
+        )
+    
+    # df_n, df_n_instr = utils.pc_and_inst_dfs_from_csv_files(
+    # # df_n = df_from_pc_files(
+    #         f_names, 
+    #         column_prefix    = 'normal: ',
+    #         relative_pc      = conf['data'].getboolean('relative_pc'),
+    #         ignore_non_jumps = conf['data'].getboolean('ignore_non_jumps'),
+    #         file_loader_signals = file_loader_signals
+    #         )
+    instruction_types = utils.get_instruction_types(dfs_n['instr_names'])
+    dfs_n['instr_name_ids'] = utils.substitute_instruction_names_by_ids(dfs_n['instr_names'], instruction_types)
 
     logging.info(f'{len(instruction_types)} different instruction types were found in the trace files. These were:')
     for instr, id_ in instruction_types.items():
         logging.info(f'{instr:<6} (id={id_})')
 
-    logging.info(f'Number of normal pc files: {df_n.shape[1]}')
+    logging.info(f'Number of normal pc files: {len(f_names)}')
 
 def generate_artificial_anomalies_from_training_dataset(anomalies_per_normal_file, reduce_loops, reduce_loops_min_iteration_size, file_loader_signals=None):
-    global df_n, df_n_instr, instruction_types, df_a, df_a_instr, df_a_instr_numeric, df_a_ground_truth
+    # global df_n, df_n_instr, instruction_types, df_a, df_a_instr, df_a_instr_numeric, df_a_ground_truth
+    global dfs_n, dfs_a, instruction_types, df_a_ground_truth
     logging.info('Generating artificial anomalies.')
-    df_a, df_a_instr, df_a_ground_truth, anomalies_ranges, pre_anomaly_values = Artificial_Anomalies.generate(
-            df_n,
-            df_n_instr,
+    # df_a, df_a_instr, df_a_ground_truth, anomalies_ranges, pre_anomaly_values = Artificial_Anomalies.generate(
+    dfs_a, df_a_ground_truth, anomalies_ranges, pre_anomaly_values = Artificial_Anomalies.generate(
+            # df_n,
+            # df_n_instr,
+            dfs_n,
             instruction_types,
 
             anomalies_per_normal_file, # how many anomalies to create per normal file * anomaly methods
@@ -254,12 +269,13 @@ def generate_artificial_anomalies_from_training_dataset(anomalies_per_normal_fil
             # reduce_loops = conf['data'].getboolean('artificial_anomalies_reduce_loops'),
             # min_iteration_size = conf['data'].getint('artificial_anomalies_reduce_loops_min_iteration_size')
             )
-    df_a_instr_numeric = utils.substitute_instruction_names_by_ids(df_a_instr, instruction_types)
-    logging.info(f'Number of abnormal pc files: {df_a.shape[1]} (each having a single anomaly, consisting of multiple program counter values)')
+    # df_a_instr_numeric = utils.substitute_instruction_names_by_ids(df_a_instr, instruction_types)
+    logging.info(f'Number of abnormal pc files: {dfs_a['pc'].shape[1]} (each having a single anomaly, consisting of multiple program counter values)')
 
     if conf['output'].getboolean('store_csvs_for_external_testing'):
         logging.info('Storing csvs for external testing')
-        utils.store_csvs_for_external_testing(df_n, df_a, df_a_ground_truth, plot=conf['output'].getboolean('plot_csvs'))
+        # utils.store_csvs_for_external_testing(df_n, df_a, df_a_ground_truth, plot=conf['output'].getboolean('plot_csvs'))
+        utils.store_csvs_for_external_testing(dfs_n, dfs_a, df_a_ground_truth, plot=conf['output'].getboolean('plot_csvs'))
 
 
 # if args.abnormal_pc:
@@ -302,8 +318,10 @@ def generate_artificial_anomalies_from_training_dataset(anomalies_per_normal_fil
 def plot_datasets():
     logging.info('Plotting pc data.')
     plot_data(
-            df_n,
-            df_a,
+            # df_n,
+            # df_a,
+            dfs_n['pc'],
+            dfs_a['pc'],
             function_ranges=function_ranges,
             anomalies_ranges=anomalies_ranges,
             pre_anomaly_values=pre_anomaly_values
@@ -371,7 +389,8 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
     clear_dicts()
     window_sizes = window_sizes_
 
-    abnormal_files_training_size = int(df_a.shape[1] * conf['models_that_train_with_abnormal_examples'].getfloat('abnormal_examples_training_split'))
+    # abnormal_files_training_size = int(df_a.shape[1] * conf['models_that_train_with_abnormal_examples'].getfloat('abnormal_examples_training_split'))
+    abnormal_files_training_size = int(dfs_a['pc'].shape[1] * conf['models_that_train_with_abnormal_examples'].getfloat('abnormal_examples_training_split'))
     logging.info("Generating sliding windows. ('Training abnormal' windows are used only by some detection methods)")
 
     df_stats = pd.DataFrame( columns=['Training normal', 'Training abnormal', 'Testing normal', 'Testing abnormal'], index = window_sizes)
@@ -383,9 +402,11 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
             
         logging.debug(f'... window size {window_size}')
         logging.debug(f'... generating normal windows')
-        normal_windows = utils.pc_and_instr_dfs_to_sliding_windows(
-                df_n, 
-                df_n_instr_numeric,
+        # normal_windows = utils.pc_and_instr_dfs_to_sliding_windows(
+        normal_windows = utils.dfs_to_sliding_windows(
+                # df_n, 
+                # df_n_instr_numeric,
+                dfs_n,
                 window_size=window_size, 
                 unique=True,
                 append_features=append_sliding_window_features
@@ -537,6 +558,10 @@ def train_test_evaluate(active_methods_map, dont_plot=False, pyqt_progress_signa
     if not dont_plot:
         utils.plot_results(df_results_all, conf=conf)
     return df_results_all
+
+if __name__ == '__main__':
+    pass
+
 
 # import pdb; pdb.set_trace()
 
