@@ -101,6 +101,9 @@ class Unique_Transitions(Detection_Model):
             logging.error(f'{e}')
             import pdb; pdb.set_trace()
 
+        # import pdb; pdb.set_trace()
+
+
         # set is used for fast lookup
         detected_ut_set = set()
 

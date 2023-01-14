@@ -4,6 +4,7 @@ from PyQt6.QtCore import QRunnable, pyqtSignal, QObject
 import traceback
 import inspect
 from .file_load_status import FileLoadStatus
+import logging
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
@@ -54,6 +55,8 @@ class FileLoader(QRunnable):
         df_stats = ccm.generate_sliding_windows(*self.generate_sliding_windows_args, file_loader_signals=self.signals)
         for f_name in self.f_names:
             self.signals.update_file_status.emit((f_name, FileLoadStatus.FINISHED.value))
+
+        logging.debug('Finished loading files')
         self.signals.finished.emit(self.f_names, df_stats)
 
 

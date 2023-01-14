@@ -99,6 +99,36 @@ def dfs_to_sliding_windows(dfs, window_size, unique=False, append_features=False
     convert_df_columns_to_strings(windows) # just to avoid "FutureWarning" in sklearn or pandas (can't remember which)
     return windows
 
+def pc_and_instr_dfs_to_sliding_windows(df, df_instr, window_size, unique=False, append_features=False):
+    ''' df contains a column per each ".pc" file where each cell is a program counter value.  '''
+    if type(df) == pd.core.series.Series:
+        windows = series_to_sliding_windows(df, window_size)
+        windows_instr = series_to_sliding_windows(df_instr, window_size)
+    else:
+        df = merge_pc_df_columns(df)
+        df_instr = merge_pc_df_columns(df_instr)
+        windows = series_to_sliding_windows(df['all_pc'], window_size)
+        windows_instr = series_to_sliding_windows(df_instr['all_pc'], window_size)
+    if append_features:
+        windows = append_features_to_sliding_windows(windows)
+
+    # include instructions in sliding windows (columns with instructions will have "_instr" in their names
+    windows = windows.join(windows_instr, rsuffix='_instr')
+    if unique:
+        windows = windows.drop_duplicates()
+
+    # # compute features like mean, std, min, max based only on program counters
+    # features = compute_features_to_sliding_windows(windows) if append_features else {}
+    # # include previously computed features 
+    # for name, values in features.items():
+    #     windows[name] = values
+
+    # include instruction type ids in sliding windows
+
+    convert_df_columns_to_strings(windows) # just to avoid "FutureWarning" in sklearn or pandas (can't remember which)
+    return windows
+
+
 def merge_df_columns(df):
     ''' Creates df with "all_values" column that contains program counters from 
         multiple files (columns), separated by the "separator_value" '''
@@ -295,7 +325,7 @@ def pc_and_instr_dfs_to_sliding_windows(df, df_instr, window_size, unique=False,
     convert_df_columns_to_strings(windows) # just to avoid "FutureWarning" in sklearn or pandas (can't remember which)
     return windows
 
-def append_features_to_sliding_windows(windows, suffix=''):
+def append_features_to_sliding_windows(windows, suffix='', round_digits=4):
     # import pdb; pdb.set_trace()
     # generate features first before including them in the dataframe
     mean = windows.mean(axis=1)
@@ -311,12 +341,12 @@ def append_features_to_sliding_windows(windows, suffix=''):
     except:
         mean_jump_size = 0
     # include features
-    windows['mean' + suffix] = mean
-    windows['std' + suffix] = std
+    windows['mean' + suffix] = mean.round(round_digits)
+    windows['std' + suffix] = std.round(round_digits)
     windows['min' + suffix] = min_
     windows['max' + suffix] = max_
     windows['jumps_count' + suffix] = jumps_count
-    windows['mean_jump_size' + suffix] = mean_jump_size
+    windows['mean_jump_size' + suffix] = mean_jump_size.round(round_digits)
     windows.fillna(0, inplace=True) # mean_jump_size may be NaN in case of system calls...
     return windows
 

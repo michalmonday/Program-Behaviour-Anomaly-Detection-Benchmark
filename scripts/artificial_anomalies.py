@@ -48,8 +48,8 @@ class Artificial_Anomalies:
         try:
             col_instr[offset:offset+section_size] = new_instr
         except Exception as e:
-            import pdb; pdb.set_trace()
             print(e)
+            import pdb; pdb.set_trace()
         col_ground_truth = __class__.generate_ground_truth_column(col, offset, section_size)
         return col, col_instr, anomalies_ranges, original_values, col_ground_truth
 
@@ -263,8 +263,9 @@ class Artificial_Anomalies:
 
     @staticmethod
     def generate_random_section_size(col):
-        min_size = 10
-        max_size = min(50, col.shape[0]-2)
+        min_size = min(10, col.count()-3)
+        assert min_size >= 1, f'min_size is smaller than 1, min_size={min_size}'
+        max_size = min(50, col.count()-2)
         assert max_size >= min_size, f'max_size={max_size} min_size={min_size}'
         return random.randint(min_size, max_size)
 
@@ -349,7 +350,7 @@ class Artificial_Anomalies:
 
                     # section_size = __class__.generate_random_section_size(df_n[col_name])
                     # offset = __class__.generate_random_offset(df_n[col_name], section_size)
-                    col_a, col_a_instr, ar, pav, col_a_ground_truth = method(dfs_n['pc'][col_name].copy(), dfs_n['instr'][col_name].copy(), instruction_types) #, section_size=section_size, offset=offset)
+                    col_a, col_a_instr, ar, pav, col_a_ground_truth = method(dfs_n['pc'][col_name].copy(), dfs_n['instr_names'][col_name].copy(), instruction_types) #, section_size=section_size, offset=offset)
                     # keep record of anomalies and previous values (for plotting later)
                     anomalies_ranges.append(ar)
                     pre_anomaly_pc_values.append(pav)
@@ -360,8 +361,8 @@ class Artificial_Anomalies:
                             dfs_a[metric_name] = pd.DataFrame()
                         if metric_name == 'pc':
                             dfs_a['pc'][new_col_name] = col_a
-                        elif metric_name == 'instr':
-                            dfs_a['instr'][new_col_name] = col_a_instr
+                        elif metric_name == 'instr_names':
+                            dfs_a['instr_names'][new_col_name] = col_a_instr
                         else:
                             dfs_a[metric_name][new_col_name] = dfs_n[metric_name][col_name]
                     # df_a[new_col_name] = col_a

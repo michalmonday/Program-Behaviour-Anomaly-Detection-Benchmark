@@ -242,6 +242,10 @@ def load_and_preprocess_input_files(f_names, relative_pc=True, ignore_non_jumps=
     #         )
     instruction_types = utils.get_instruction_types(dfs_n['instr_names'])
     dfs_n['instr_name_ids'] = utils.substitute_instruction_names_by_ids(dfs_n['instr_names'], instruction_types)
+    # dfs_n.drop(columns=['instr_names', 'instr_strings'], inplace=True)
+    # del dfs_n['instr_names']
+    # del dfs_n['instr_strings']
+    # del dfs_n['instr']
 
     logging.info(f'{len(instruction_types)} different instruction types were found in the trace files. These were:')
     for instr, id_ in instruction_types.items():
@@ -251,7 +255,7 @@ def load_and_preprocess_input_files(f_names, relative_pc=True, ignore_non_jumps=
 
 def generate_artificial_anomalies_from_training_dataset(anomalies_per_normal_file, reduce_loops, reduce_loops_min_iteration_size, file_loader_signals=None):
     # global df_n, df_n_instr, instruction_types, df_a, df_a_instr, df_a_instr_numeric, df_a_ground_truth
-    global dfs_n, dfs_a, instruction_types, df_a_ground_truth
+    global dfs_n, dfs_a, instruction_types, df_a_ground_truth, anomalies_ranges, pre_anomaly_values
     logging.info('Generating artificial anomalies.')
     # df_a, df_a_instr, df_a_ground_truth, anomalies_ranges, pre_anomaly_values = Artificial_Anomalies.generate(
     dfs_a, df_a_ground_truth, anomalies_ranges, pre_anomaly_values = Artificial_Anomalies.generate(
@@ -268,13 +272,15 @@ def generate_artificial_anomalies_from_training_dataset(anomalies_per_normal_fil
             # reduce_loops = conf['data'].getboolean('artificial_anomalies_reduce_loops'),
             # min_iteration_size = conf['data'].getint('artificial_anomalies_reduce_loops_min_iteration_size')
             )
+    # import pdb; pdb.set_trace()
     # df_a_instr_numeric = utils.substitute_instruction_names_by_ids(df_a_instr, instruction_types)
+    dfs_a['instr_name_ids'] = utils.substitute_instruction_names_by_ids(dfs_a['instr_names'], instruction_types)
     logging.info(f'Number of abnormal pc files: {dfs_a["pc"].shape[1]} (each having a single anomaly, consisting of multiple program counter values)')
 
     if conf['output'].getboolean('store_csvs_for_external_testing'):
-        logging.info('Storing csvs for external testing')
+        logging.info('[NOT IMPLEMENTED] Storing csvs for external testing')
         # utils.store_csvs_for_external_testing(df_n, df_a, df_a_ground_truth, plot=conf['output'].getboolean('plot_csvs'))
-        utils.store_csvs_for_external_testing(dfs_n, dfs_a, df_a_ground_truth, plot=conf['output'].getboolean('plot_csvs'))
+        # utils.store_csvs_for_external_testing(dfs_n, dfs_a, df_a_ground_truth, plot=conf['output'].getboolean('plot_csvs'))
 
 
 # if args.abnormal_pc:
@@ -387,7 +393,14 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
     clear_dicts()
     window_sizes = window_sizes_
 
-    import pdb; pdb.set_trace()
+    del dfs_n['instr']
+    del dfs_n['instr_names']
+    del dfs_n['instr_strings']
+    del dfs_a['instr']
+    del dfs_a['instr_names']
+    del dfs_a['instr_strings']
+
+    # import pdb; pdb.set_trace()
 
     # abnormal_files_training_size = int(df_a.shape[1] * conf['models_that_train_with_abnormal_examples'].getfloat('abnormal_examples_training_split'))
     abnormal_files_training_size = int(dfs_a['pc'].shape[1] * conf['models_that_train_with_abnormal_examples'].getfloat('abnormal_examples_training_split'))
@@ -449,7 +462,60 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
         # Generate abnormal windows for testing (from previously loaded/generated "df_a" dataframe)
         logging.debug(f'... generating abnormal windows for testing')
         # abnormal_windows_all_files_all_sizes[window_size] = [ utils.pc_and_instr_dfs_to_sliding_windows(df_a[[col_a]], df_a_instr_numeric[[col_a]], window_size=window_size, unique=False, append_features=append_sliding_window_features) for col_a in df_a ]
-        abnormal_windows_all_files_all_sizes[window_size] = [ utils.dfs_to_sliding_windows(dfs_a, window_size=window_size, unique=False, append_features=append_sliding_window_features) for col_a in dfs_a ]
+
+        # all column names are consistend in all DataFrames of dfs_a dictionary so ['pc'] can be used
+        # TODO: no idea why I made it into a list in the first place, it should probably be a single DataFrame
+        #       Edit: I think it's because I wanted to have a list of DataFrames, one for each file (because predict_all expects a list of windows, 1 for each file)
+        abnormal_windows_all_files_all_sizes[window_size] = []
+        for col_a_example in dfs_a['pc']:
+            dfs_a_single_file = {k: v[[col_a_example]] for k, v in dfs_a.items()}
+            dfs_a_windows = utils.dfs_to_sliding_windows(dfs_a_single_file, window_size=window_size, unique=False, append_features=append_sliding_window_features)
+            abnormal_windows_all_files_all_sizes[window_size].append(dfs_a_windows)
+        # import pdb; pdb.set_trace()
+        #  df_a.columns are:  [
+        #   'randomize_section_(0,0,0): normal_1.csv',
+        #   'randomize_section_(0,0,1): normal_1.csv',
+        #   'randomize_section_(0,1,0): normal_2.csv',
+        #   'randomize_section_(0,1,1): normal_2.csv',
+        #   'randomize_section_(0,2,0): normal_3.csv',
+        #   'randomize_section_(0,2,1): normal_3.csv' 
+        #   ] 
+
+        # dfa_instr_numeric.columns are:  [
+        #   'randomize_section_(0,0,0): normal_1.csv',
+        #   'randomize_section_(0,0,1): normal_1.csv',
+        #   'randomize_section_(0,1,0): normal_2.csv',
+        #   'randomize_section_(0,1,1): normal_2.csv',
+        #   'randomize_section_(0,2,0): normal_3.csv',
+        #   'randomize_section_(0,2,1): normal_3.csv' 
+        #   ] 
+
+        # so dfs_a['pc'] and dfs_a['instr'] must have the same columns, 1 for each file
+
+        # abnormal_windows_all_files_all_sizes[window_size] is a list of dataframes, each dataframe containing windows of one file
+        # when window_size=7, abnormal_windows_all_files_all_sizes[window_size][0].columns are:
+        #   [
+        #    '0', # first pc of sliding window
+        #    '1',
+        #    '2',
+        #    '3',
+        #    '4',
+        #    '5',
+        #    '6', # 7th pc of sliding window
+        #    'mean',
+        #    'std',
+        #    'min',
+        #    'max',
+        #    'jumps_count',
+        #    'mean_jump_size',
+        #    '0_instr',
+        #    '1_instr',
+        #    '2_instr',
+        #    '3_instr',
+        #    '4_instr',
+        #    '5_instr',
+        #    '6_instr'
+        #   ]
 
         logging.debug(f'... windowizing ground truth labels')
         df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
@@ -459,7 +525,9 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
         df_a_ground_truth_windowized_all_sizes[window_size] = df_a_ground_truth_windowized
         df_stats.loc[window_size] = [
                 normal_windows.shape[0], # number of normal training windows
-                abnormal_windows.shape[0], # number of abnormal training windows
+                0, # number of abnormal training windows
+                # abnormal_windows.shape[0], # number of abnormal training windows
+
                 # df_a_ground_truth_windowized is a 3D structure (2D dataframe containing sets of anomaly IDs)
                 # that's why 2 lines below may seem ugly
                 df_a_ground_truth_windowized.apply(lambda x: x==set()).sum().sum(), # number of normal testing windows
@@ -545,7 +613,7 @@ def train_test_evaluate(active_methods_map, dont_plot=False, pyqt_progress_signa
             testing_time = (time.time() - start_time)*1000
             logging.info(f'Testing took {testing_time:.0f}ms')
 
-            # evaluation
+            # evaluation (em = evaluation metrics)
             not_detected, em = model.evaluate_all_2(results, df_a_ground_truth_windowized)
             logging.info( model.format_evaluation_metrics(em) )
             em['training_time_ms'] = int(training_time)
@@ -553,9 +621,10 @@ def train_test_evaluate(active_methods_map, dont_plot=False, pyqt_progress_signa
             em['method_main_name'] = name
             em['window_size'] = window_size
             df_results_all.loc[method_name] = em
+            # import pdb; pdb.set_trace()
 
             if not not_detected.empty and conf['output'].getboolean('plot_not_detected_anomalies'):
-                fig, axs = utils.plot_undetected_regions(not_detected, df_a, pre_anomaly_values, anomalies_ranges, title=f'Undetected anomalies - {method_name}')
+                fig, axs = utils.plot_undetected_regions(not_detected, dfs_a['pc'], pre_anomaly_values, anomalies_ranges, title=f'Undetected anomalies - {method_name}')
                 utils.save_figure(fig, method_name, images_dir)
             if pyqt_progress_signal:
                 pyqt_progress_signal.emit(('done', window_size, name, constructor_kwargs))

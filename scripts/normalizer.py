@@ -8,6 +8,7 @@ class Normalizer:
         self.max_val = None
 
     def assign_min_max_for_normalization(self, X_train):
+        # import pdb; pdb.set_trace()
         self.min_val = tf.reduce_min(X_train.values).numpy()
         self.max_val = tf.reduce_max(X_train.values).numpy()
 
