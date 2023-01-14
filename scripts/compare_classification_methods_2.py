@@ -422,6 +422,51 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
         # Generate abnormal windows for testing (from previously loaded/generated "df_a" dataframe)
         logging.debug(f'... generating abnormal windows for testing')
         abnormal_windows_all_files_all_sizes[window_size] = [ utils.pc_and_instr_dfs_to_sliding_windows(df_a[[col_a]], df_a_instr_numeric[[col_a]], window_size=window_size, unique=False, append_features=append_sliding_window_features) for col_a in df_a ]
+        #  df_a.columns are:  [
+        #   'randomize_section_(0,0,0): normal_1.csv',
+        #   'randomize_section_(0,0,1): normal_1.csv',
+        #   'randomize_section_(0,1,0): normal_2.csv',
+        #   'randomize_section_(0,1,1): normal_2.csv',
+        #   'randomize_section_(0,2,0): normal_3.csv',
+        #   'randomize_section_(0,2,1): normal_3.csv' 
+        #   ] 
+
+        # dfa_instr_numeric.columns are:  [
+        #   'randomize_section_(0,0,0): normal_1.csv',
+        #   'randomize_section_(0,0,1): normal_1.csv',
+        #   'randomize_section_(0,1,0): normal_2.csv',
+        #   'randomize_section_(0,1,1): normal_2.csv',
+        #   'randomize_section_(0,2,0): normal_3.csv',
+        #   'randomize_section_(0,2,1): normal_3.csv' 
+        #   ] 
+
+        # so dfs_a['pc'] and dfs_a['instr'] must have the same columns, 1 for each file
+
+        # abnormal_windows_all_files_all_sizes[window_size] is a list of dataframes, each dataframe containing windows of one file
+        # when window_size=7, abnormal_windows_all_files_all_sizes[window_size][0].columns are:
+        #   [
+        #    '0', # first pc of sliding window
+        #    '1',
+        #    '2',
+        #    '3',
+        #    '4',
+        #    '5',
+        #    '6', # 7th pc of sliding window
+        #    'mean',
+        #    'std',
+        #    'min',
+        #    'max',
+        #    'jumps_count',
+        #    'mean_jump_size',
+        #    '0_instr',
+        #    '1_instr',
+        #    '2_instr',
+        #    '3_instr',
+        #    '4_instr',
+        #    '5_instr',
+        #    '6_instr'
+        #   ]
+        
         # import pdb; pdb.set_trace()
 
         logging.debug(f'... windowizing ground truth labels')
