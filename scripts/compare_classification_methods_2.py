@@ -70,6 +70,21 @@ parser.add_argument(
         help='Use datasets provided by University of Mexico (study from 1998).'
         )
 
+parser.add_argument(
+        '--store-models',
+        required=False,
+        action='store_true',
+        help='Stores models as joblib files in models/ directory. So these can be loaded later with --load-models flag (e.g. on ZC706 board).'
+        )
+
+parser.add_argument(
+        '--load-models',
+        required=False,
+        action='store_true',
+        help='Loads previously stored models from models/ directory (from joblist files).'
+        )
+
+
 args = parser.parse_args()
 
 if args.use_unm_datasets and any([args.normal_pc, args.abnormal_pc, args.function_ranges]):
@@ -105,7 +120,9 @@ from math import ceil, floor, sqrt
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 import time
 from tabulate import tabulate
-import pathlib
+from pathlib import Path
+import joblib
+import re
 
 import utils
 from utils import plot_pc_histogram, plot_pc_timeline, plot_vspans, plot_vspans_ranges, print_config
@@ -130,10 +147,46 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 import configparser
 conf = configparser.ConfigParser()
 # config file relative to directory of this file
-this_file_dir = pathlib.Path(__file__).parent.resolve()
-conf.read(os.path.join(this_file_dir, 'compare_classification_methods_config.ini'))
+THIS_FILE_DIR = Path(__file__).parent.resolve()
+conf.read(THIS_FILE_DIR / 'compare_classification_methods_config.ini')
 logging.info(f'Loaded config from: compare_classification_methods_config.ini')
 print_config(conf)
+
+MODELS_DIR = THIS_FILE_DIR / Path('models')
+
+def save_models():
+    global all_models
+    if not os.path.exists(MODELS_DIR):
+        logging.debug(f'Creating directory "{MODELS_DIR}"')
+        os.mkdir(MODELS_DIR)
+    logging.debug('Saving models...')
+    joblib.dump(all_models, MODELS_DIR / 'all_models.joblib')
+    # for model_object, constructor_kwargs in all_models.items():
+    #     f_name = build_model_fname(model_object.__class__, constructor_kwargs)
+    #     logging.debug(f'Saving model "{model_object.__class__.__name__}" as {f_name}')
+    #     joblib.dump(MODELS_DIR / model_object, f_name)
+
+def load_models():
+    global all_models
+    logging.debug('Loading models...')
+    if not os.path.exists(MODELS_DIR / 'all_models.joblib'):
+        logging.warning(f'Could not find model "all_models.joblib" in "{MODELS_DIR}" directory')
+        return
+    all_models = joblib.load(MODELS_DIR / 'all_models.joblib')
+    # for name, (model_class, constructor_kwargs) in anomaly_detection_models.items():
+    #     f_name = build_model_fname(model_class, constructor_kwargs)
+    #     if not os.path.exists(MODELS_DIR / f_name):
+    #         logging.warning(f'Could not find model "{model_class.__name__}" as {f_name} in "{MODELS_DIR}" directory')
+    #         continue
+    #     logging.debug(f'Loading model "{model_class.__name__}" as {f_name}')
+    #     model_object = joblib.load(MODELS_DIR / f_name)
+    #     import pdb; pdb.set_trace()
+
+def save_datasets():
+    pass
+
+def load_datasets():
+    pass
 
 
 def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_values=[]):
@@ -172,8 +225,8 @@ def plot_data(df_n, df_a, function_ranges={}, anomalies_ranges=[], pre_anomaly_v
                     # ax.fill_between(vals.index.values, vals.values, df_a.loc[vals.index].values.reshape(-1), color='r', alpha=0.15)
                     ax.fill_between(vals.index.values, vals.values, df_a.loc[vals.index][col_name].values.reshape(-1), color='r', alpha=0.15)
 
-stats_path = os.path.join(this_file_dir, 'stats.csv') 
-results_path = os.path.join(this_file_dir, 'results.csv') 
+stats_path = THIS_FILE_DIR / 'stats.csv'
+results_path = THIS_FILE_DIR / 'results.csv'
 if args.plot_last_results:
     df_stats = pd.read_csv(stats_path, index_col=0)
     utils.print_stats(df_stats)
@@ -181,7 +234,7 @@ if args.plot_last_results:
     df_results_all = pd.read_csv(results_path)
     utils.plot_results(df_results_all, conf=conf)
     exit()
-images_dir = os.path.join(this_file_dir, conf['output'].get('images_dir').strip())
+images_dir = THIS_FILE_DIR / conf['output'].get('images_dir').strip()
 
 if args.quick_test:
     logging.info('\nOVERRIDING CONFIG WITH VALUES FOR QUICK TESTING (because --quick-test was supplied)')
@@ -219,7 +272,12 @@ pre_anomaly_values = []
 instruction_types = None
 window_sizes = None
 normal_fnames = None
+all_models = {} # key=object, value=constructor_kwargs
 
+if args.load_models:
+    logging.info('Loading models from file.')
+    load_models()
+    
 def load_and_preprocess_input_files(f_names, relative_pc=True, ignore_non_jumps=True, file_loader_signals=None):
     # global df_n, df_n_instr, instruction_types, df_n_instr_numeric, normal_fnames
     global dfs_n, instruction_types, normal_fnames
@@ -550,6 +608,8 @@ def train_test_evaluate(active_methods_map, dont_plot=False, pyqt_progress_signa
     ''' active_methods_map is a dictionary where:
             key = name corresponding to anomaly_detection_models keys
             value = bool state of the checkbox from GUI  '''
+    global all_models
+    all_models = {} # key=object, value=constructor_kwargs
     # Training, testing and evaluating different detection methods.
     for name, (model_class, constructor_kwargs) in anomaly_detection_models.items():
         if not active_methods_map[name]:
@@ -628,12 +688,24 @@ def train_test_evaluate(active_methods_map, dont_plot=False, pyqt_progress_signa
                 utils.save_figure(fig, method_name, images_dir)
             if pyqt_progress_signal:
                 pyqt_progress_signal.emit(('done', window_size, name, constructor_kwargs))
+            
+            all_models[model] = constructor_kwargs
 
     # results_columns_plot = ['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms'] 
     df_results_all.to_csv(results_path)
     if not dont_plot:
         utils.plot_results(df_results_all, conf=conf)
+
+    if args.save_models:
+        save_models()
     return df_results_all
+
+def build_model_fname(model_class, constructor_kwargs):
+    kwargs_str = re.sub(r'[^0-9a-zA-Z_-]', '_', '-'.join([f'{k}-{v}' for k, v in constructor_kwargs.items()]))
+    f_name = f'model_{model_class.__name__}__{kwargs_str}.joblib'
+    return f_name
+
+
 
 if __name__ == '__main__':
     pass
