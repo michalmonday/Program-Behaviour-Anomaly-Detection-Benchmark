@@ -6,8 +6,6 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 import traceback
 
-
-
 from compare_classification_methods_GUI.qt_worker import Worker
 from compare_classification_methods_GUI.MainWindow import Ui_MainWindow
 from compare_classification_methods_GUI.settings import settings
@@ -53,6 +51,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # self.btn_download.clicked.connect(self.begin_download)
         self.btn_load_and_preprocess_input_files.clicked.connect(self.load_and_preprocess_input_files)
         self.btn_train_test_evaluate.clicked.connect(self.train_test_evaluate)
+        self.btn_save_models.clicked.connect(self.save_models)
+        self.btn_load_models.clicked.connect(self.load_models)
+
+        self.btn_train_test_evaluate.setEnabled(False)
+        self.btn_save_models.setEnabled(False)
+        self.btn_load_models.setEnabled(False)
         # self.set_item_icon(self.btn_download, 'SP_ArrowDown')
         self.threadpool = QThreadPool()
 
@@ -61,19 +65,31 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # self.checkBox_relative.make_persistent()
         make_persistent(self.app)
 
+    def save_models(self):
+        worker = Worker(ccm.save_models) 
+        # worker.signals.progress.connect(self.on_train_test_evaluate_progress)
+        # worker.signals.result.connect(self.on_train_test_evaluate_result)
+        # worker.signals.finished.connect(lambda: self.statusBar().showMessage(''))
+        self.threadpool.start(worker)
 
+    def load_models(self):
+        worker = Worker(ccm.load_models) 
+        # worker.signals.progress.connect(self.on_train_test_evaluate_progress)
+        # worker.signals.result.connect(self.on_train_test_evaluate_result)
+        # worker.signals.finished.connect(lambda: self.statusBar().showMessage(''))
+        self.threadpool.start(worker)
 
-        # reduce loops change state behaviour
-        def on_reduce_loops_checkbox_changed(state):
-            reduce_loops_enabled = state == Qt.CheckState.Checked.value
-            self.lineEdit_minimum_loop_size.setEnabled(reduce_loops_enabled)
-            self.label_minimum_loop_size.setEnabled(reduce_loops_enabled)
-        self.checkBox_reduce_loops.stateChanged.connect(on_reduce_loops_checkbox_changed)
+    # reduce loops change state behaviour
+    # def on_reduce_loops_checkbox_changed(state):
+    #     reduce_loops_enabled = state == Qt.CheckState.Checked.value
+    #     self.lineEdit_minimum_loop_size.setEnabled(reduce_loops_enabled)
+    #     self.label_minimum_loop_size.setEnabled(reduce_loops_enabled)
+    #     self.checkBox_reduce_loops.stateChanged.connect(on_reduce_loops_checkbox_changed)
 
-        # reduce loops initial state (unfortunately it must be done after UI_MainWindow.setupUI())
-        reduce_loops_enabled = self.checkBox_reduce_loops.checkState() == Qt.CheckState.Checked 
-        self.lineEdit_minimum_loop_size.setEnabled(reduce_loops_enabled)
-        self.label_minimum_loop_size.setEnabled(reduce_loops_enabled) 
+    #     # reduce loops initial state (unfortunately it must be done after UI_MainWindow.setupUI())
+    #     reduce_loops_enabled = self.checkBox_reduce_loops.checkState() == Qt.CheckState.Checked 
+    #     self.lineEdit_minimum_loop_size.setEnabled(reduce_loops_enabled)
+    #     self.label_minimum_loop_size.setEnabled(reduce_loops_enabled) 
 
 
     def set_item_icon(self, item, icon_name):
@@ -96,6 +112,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def load_and_preprocess_input_files(self):
         self.btn_load_and_preprocess_input_files.setEnabled(False) 
+        self.btn_train_test_evaluate.setEnabled(False)
+        self.btn_save_models.setEnabled(False)
+        self.btn_load_models.setEnabled(False)
+
         self.tableWidget_input_files.clear()
         files = QFileDialog.getOpenFileNames(self, "Select Directory")
         if not files or not files[0]:
@@ -111,6 +131,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def on_file_load_finished(self, f_names, df_stats):
         self.btn_load_and_preprocess_input_files.setEnabled(True) 
+        self.btn_train_test_evaluate.setEnabled(True)
+        self.btn_save_models.setEnabled(True)
+        self.btn_load_models.setEnabled(True)
         self.tableWidget_dataset.load_dataframe(df_stats)
 
     def train_test_evaluate(self):

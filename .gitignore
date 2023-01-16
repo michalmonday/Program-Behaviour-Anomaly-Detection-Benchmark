@@ -8,3 +8,5 @@ log_files/log_archive/*.log
 *.swp
 *.swo
 *.log
+scripts/venv
+scripts/venv32

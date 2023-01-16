@@ -1,5 +1,5 @@
 ,anomaly_recall,false_positives_ratio,anomaly_count,detected_anomaly_count,non_anomaly_count,false_positives,training_time_ms,testing_time_ms,method_main_name,window_size,args_str
-"N-grams (window_size=12, )",1.0,0.0,100,100,126762,0,1,43636,N-grams,12,
-"Isolation forest (window_size=12, contamination=0.001)",1.0,0.0007731023492844859,100,100,126762,98,457,31391,Isolation forest,12,
-"One class SVM (window_size=12, kernel=sigmoid)",0.0,0.8156703112920276,100,0,126762,103396,5,754,One class SVM,12,
-"Local outlier factor (window_size=12, contamination=0.001)",0.87,0.0007731023492844859,100,87,126762,98,15,2587,Local outlier factor,12,
+"N-grams (window_size=12, )",1.0,0.0,20,20,40,0,0,4306,N-grams,12,
+"Isolation forest (window_size=12, contamination=0.001)",0.0,0.05,20,0,40,2,59,251,Isolation forest,12,
+"One class SVM (window_size=12, kernel=sigmoid)",1.0,1.0,20,20,40,40,0,3,One class SVM,12,
+"Local outlier factor (window_size=12, contamination=0.001)",1.0,0.0,20,20,40,0,0,11,Local outlier factor,12,

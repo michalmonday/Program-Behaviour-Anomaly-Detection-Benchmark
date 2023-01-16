@@ -475,7 +475,7 @@
     <property name="geometry">
      <rect>
       <x>610</x>
-      <y>700</y>
+      <y>630</y>
       <width>211</width>
       <height>24</height>
      </rect>
@@ -497,7 +497,7 @@
     <property name="geometry">
      <rect>
       <x>610</x>
-      <y>730</y>
+      <y>660</y>
       <width>131</width>
       <height>24</height>
      </rect>
@@ -546,6 +546,32 @@
       </font>
      </property>
     </widget>
+   </widget>
+   <widget class="QPushButton" name="btn_save_models">
+    <property name="geometry">
+     <rect>
+      <x>610</x>
+      <y>690</y>
+      <width>80</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Save models</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btn_load_models">
+    <property name="geometry">
+     <rect>
+      <x>610</x>
+      <y>720</y>
+      <width>80</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Load models</string>
+    </property>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">

@@ -71,10 +71,10 @@ parser.add_argument(
         )
 
 parser.add_argument(
-        '--store-models',
+        '--save-models',
         required=False,
         action='store_true',
-        help='Stores models as joblib files in models/ directory. So these can be loaded later with --load-models flag (e.g. on ZC706 board).'
+        help='Saves models as joblib files in models/ directory. So these can be loaded later with --load-models flag (e.g. on ZC706 board).'
         )
 
 parser.add_argument(
@@ -123,20 +123,21 @@ from tabulate import tabulate
 from pathlib import Path
 import joblib
 import re
+import pickle
 
 import utils
 from utils import plot_pc_histogram, plot_pc_timeline, plot_vspans, plot_vspans_ranges, print_config
 from artificial_anomalies import Artificial_Anomalies
-from lstm_autoencoder import lstm_autoencoder
-from lstm_autoencoder.lstm_autoencoder import LSTM_Autoencoder
+# from lstm_autoencoder import lstm_autoencoder
+# from lstm_autoencoder.lstm_autoencoder import LSTM_Autoencoder
 from unique_transitions.unique_transitions import Unique_Transitions
 from isolation_forest.isolation_forest import Isolation_Forest
 from one_class_svm.one_class_svm import OneClass_SVM
 from local_outlier_factor.local_outlier_factor import Local_Outlier_Factor
 from detection_model import Detection_Model
-from conventional_machine_learning import conventional_machine_learning as conventional_ml
-from cnn import cnn as cnn_module
-import unm_datasets
+# from conventional_machine_learning import conventional_machine_learning as conventional_ml
+# from cnn import cnn as cnn_module
+# import unm_datasets
 from normalizer import Normalizer
 
 from compare_classification_methods_GUI.file_load_status import FileLoadStatus
@@ -154,25 +155,32 @@ print_config(conf)
 
 MODELS_DIR = THIS_FILE_DIR / Path('models')
 
-def save_models():
+def save_models(full_path=MODELS_DIR / 'all_models.pickle', pyqt_progress_signal=None):
     global all_models
     if not os.path.exists(MODELS_DIR):
         logging.debug(f'Creating directory "{MODELS_DIR}"')
         os.mkdir(MODELS_DIR)
     logging.debug('Saving models...')
-    joblib.dump(all_models, MODELS_DIR / 'all_models.joblib')
+    # save as pickle
+    with open(full_path, 'wb') as f:
+        pickle.dump(all_models, f)
+    # joblib.dump(all_models, MODELS_DIR / 'all_models.joblib')
+
     # for model_object, constructor_kwargs in all_models.items():
     #     f_name = build_model_fname(model_object.__class__, constructor_kwargs)
     #     logging.debug(f'Saving model "{model_object.__class__.__name__}" as {f_name}')
     #     joblib.dump(MODELS_DIR / model_object, f_name)
 
-def load_models():
+def load_models(full_path=MODELS_DIR / 'all_models.pickle', pyqt_progress_signal=None):
     global all_models
     logging.debug('Loading models...')
     if not os.path.exists(MODELS_DIR / 'all_models.joblib'):
         logging.warning(f'Could not find model "all_models.joblib" in "{MODELS_DIR}" directory')
         return
-    all_models = joblib.load(MODELS_DIR / 'all_models.joblib')
+    # all_models = joblib.load(MODELS_DIR / 'all_models.joblib')
+    with open(full_path, 'rb') as f:
+        all_models = pickle.load(f)
+
     # for name, (model_class, constructor_kwargs) in anomaly_detection_models.items():
     #     f_name = build_model_fname(model_class, constructor_kwargs)
     #     if not os.path.exists(MODELS_DIR / f_name):
@@ -180,12 +188,13 @@ def load_models():
     #         continue
     #     logging.debug(f'Loading model "{model_class.__name__}" as {f_name}')
     #     model_object = joblib.load(MODELS_DIR / f_name)
-    #     import pdb; pdb.set_trace()
 
-def save_datasets():
+    import pdb; pdb.set_trace()
+
+def save_datasets(pyqt_progress_signal=None):
     pass
 
-def load_datasets():
+def load_datasets(pyqt_progress_signal=None):
     pass
 
 
@@ -272,7 +281,7 @@ pre_anomaly_values = []
 instruction_types = None
 window_sizes = None
 normal_fnames = None
-all_models = {} # key=object, value=constructor_kwargs
+all_models = {} # key=method_name, value=(model_object, constructor_kwargs)
 
 if args.load_models:
     logging.info('Loading models from file.')
@@ -604,41 +613,59 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
     df_stats.to_csv(stats_path)
     return df_stats
 
+def test_model(model, abnormal_windows_all_files):
+    logging.info('Testing...')
+    start_time = time.time()
+    results = model.predict_all(abnormal_windows_all_files)
+    testing_time = (time.time() - start_time)*1000
+    logging.info(f'Testing took {testing_time:.0f}ms')
+    return results, testing_time
+
+def evaluate_results(results, model, df_a_ground_truth_windowized, window_size, method_name, method_base_name, training_time=0, testing_time=0):
+    # em = evaluation metrics
+    not_detected, em = model.evaluate_all_2(results, df_a_ground_truth_windowized)
+    logging.info( model.format_evaluation_metrics(em) )
+    em['training_time_ms'] = int(training_time)
+    em['testing_time_ms'] = int(testing_time)
+    em['method_main_name'] = method_base_name
+    em['window_size'] = window_size
+    return not_detected, em
+
 def train_test_evaluate(active_methods_map, dont_plot=False, pyqt_progress_signal=None):
     ''' active_methods_map is a dictionary where:
             key = name corresponding to anomaly_detection_models keys
             value = bool state of the checkbox from GUI  '''
-    global all_models
-    all_models = {} # key=object, value=constructor_kwargs
+    global all_models, args
+    all_models = {} # key=method_name, value=(model_object, constructor_kwargs)
     # Training, testing and evaluating different detection methods.
-    for name, (model_class, constructor_kwargs) in anomaly_detection_models.items():
-        if not active_methods_map[name]:
+    for method_base_name, (model_class, constructor_kwargs) in anomaly_detection_models.items():
+        if not active_methods_map[method_base_name]:
             continue
-        # if not conf[name]['active']:
-        #     logging.info(f'Omitting "{name}" method because config has active=False')
+        # if not conf[method_base_name]['active']:
+        #     logging.info(f'Omitting "{method_base_name}" method because config has active=False')
         #     continue
         for window_size in window_sizes:
             if pyqt_progress_signal:
-                pyqt_progress_signal.emit(('training', window_size, name, constructor_kwargs))
+                pyqt_progress_signal.emit(('training', window_size, method_base_name, constructor_kwargs))
             normal_windows = normal_windows_all_sizes[window_size]
 
             df_a_ground_truth_windowized = df_a_ground_truth_windowized_all_sizes[window_size]
 
             abnormal_windows_all_files = abnormal_windows_all_files_all_sizes[window_size]
             # constructor_args = {}
-            # if 'constructor_args' in conf[name]:
-            #     constructor_args = json.loads( conf[name].get('constructor_args').strip()[1:-1] )
+            # if 'constructor_args' in conf[method_base_name]:
+            #     constructor_args = json.loads( conf[method_base_name].get('constructor_args').strip()[1:-1] )
             train_args = {}
-            if 'train_args' in conf[name]:
-                train_args = json.loads( conf[name].get('train_args').strip()[1:-1] )
+            if 'train_args' in conf[method_base_name]:
+                train_args = json.loads( conf[method_base_name].get('train_args').strip()[1:-1] )
             kwargs_str = utils.dict_to_kwargs_str(constructor_kwargs)
-            method_name = f'{name} (window_size={window_size}, {kwargs_str})'
+            method_name = f'{method_base_name} (window_size={window_size}, {kwargs_str})'
             utils.print_header(method_name)
 
             training_windows = normal_windows.copy()
             testing_windows = abnormal_windows_all_files.copy()
             # add abnormal windows to training if needed
-            if conf[name].getboolean('train_using_abnormal_windows_too'):
+            if conf[method_base_name].getboolean('train_using_abnormal_windows_too'):
                 logging.info('Appending artificial anomalous training files.')
                 # labels/examples could be shuffled here by appending "label" column to both: training_windows, 
                 # abnormal_training_windows, concating them, shuffling, and popping the "label" column
@@ -648,7 +675,7 @@ def train_test_evaluate(active_methods_map, dont_plot=False, pyqt_progress_signa
             # else:
             #     train_args['labels'] = np.array([0] * training_windows.shape[0])
 
-            if conf[name].getboolean('normalize_dataset'):
+            if conf[method_base_name].getboolean('normalize_dataset'):
                 normalizer = Normalizer()
                 normalizer.assign_min_max_for_normalization(training_windows)
                 training_windows = normalizer.normalize(training_windows)
@@ -665,31 +692,23 @@ def train_test_evaluate(active_methods_map, dont_plot=False, pyqt_progress_signa
             logging.info(f'Training took {training_time:.0f}ms')
 
             if pyqt_progress_signal:
-                pyqt_progress_signal.emit(('testing', window_size, name, constructor_kwargs))
-            # testing
-            logging.info('Testing...')
-            start_time = time.time()
-            results = model.predict_all(abnormal_windows_all_files)
-            testing_time = (time.time() - start_time)*1000
-            logging.info(f'Testing took {testing_time:.0f}ms')
+                pyqt_progress_signal.emit(('testing', window_size, method_base_name, constructor_kwargs))
 
-            # evaluation (em = evaluation metrics)
-            not_detected, em = model.evaluate_all_2(results, df_a_ground_truth_windowized)
-            logging.info( model.format_evaluation_metrics(em) )
-            em['training_time_ms'] = int(training_time)
-            em['testing_time_ms'] = int(testing_time)
-            em['method_main_name'] = name
-            em['window_size'] = window_size
-            df_results_all.loc[method_name] = em
-            # import pdb; pdb.set_trace()
+            # testing
+            results, testing_time = test_model(model, abnormal_windows_all_files)
+
+            # evaluation
+            not_detected, evaluation_metrics = evaluate_results(results, model, df_a_ground_truth_windowized, window_size, method_name, method_base_name, training_time=training_time, testing_time=testing_time)
+
+            df_results_all.loc[method_name] = evaluation_metrics
 
             if not not_detected.empty and conf['output'].getboolean('plot_not_detected_anomalies'):
                 fig, axs = utils.plot_undetected_regions(not_detected, dfs_a['pc'], pre_anomaly_values, anomalies_ranges, title=f'Undetected anomalies - {method_name}')
                 utils.save_figure(fig, method_name, images_dir)
             if pyqt_progress_signal:
-                pyqt_progress_signal.emit(('done', window_size, name, constructor_kwargs))
+                pyqt_progress_signal.emit(('done', window_size, method_base_name, constructor_kwargs))
             
-            all_models[model] = constructor_kwargs
+            all_models[method_name] = (model, constructor_kwargs)
 
     # results_columns_plot = ['anomaly_recall', 'false_positives_ratio', 'training_time_ms', 'testing_time_ms'] 
     df_results_all.to_csv(results_path)
@@ -708,7 +727,25 @@ def build_model_fname(model_class, constructor_kwargs):
 
 
 if __name__ == '__main__':
-    pass
+    if args.load_models:
+        load_models()
+
+    f_names = [
+        'normal_0_short.csv',
+        'normal_1_short.csv'
+    ]
+    load_and_preprocess_input_files(f_names, relative_pc=True, ignore_non_jumps=False, file_loader_signals=None)
+    active_methods_map = {
+        'N-grams'              : True,
+        'Isolation forest'     : True,
+        'One class SVM'        : True,
+        'Local outlier factor' : True
+    }
+    train_test_evaluate(active_methods_map)
+
+    if args.save_models:
+        save_models()
+
 
 
 # import pdb; pdb.set_trace()
@@ -756,13 +793,13 @@ if __name__ == '__main__':
     #         # conventional_ml.normalize()
     #         for model_class in conventional_ml.models:
     #             model = model_class()
-    #             name = f'{model.__class__.__name__} (n={window_size})'
+    #             method_base_name = f'{model.__class__.__name__} (n={window_size})'
     #             model.fit(X_train, y_train)
     #             y_pred = model.predict(X_test)
     #             em = utils.labels_to_evaluation_metrics(y_test.tolist(), y_pred.tolist())
-    #             # df_results.loc[name] = evaluation_metrics
-    #             df_results_all[window_size].loc[name] = em
-    #             df_results_all_merged.loc[name] = em
+    #             # df_results.loc[method_base_name] = evaluation_metrics
+    #             df_results_all[window_size].loc[method_base_name] = em
+    #             df_results_all_merged.loc[method_base_name] = em
 
 #for col_a in df_a:
 #    #########################################
