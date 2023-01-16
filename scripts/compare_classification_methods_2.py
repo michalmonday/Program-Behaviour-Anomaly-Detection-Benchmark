@@ -730,17 +730,27 @@ if __name__ == '__main__':
     if args.load_models:
         load_models()
 
-    f_names = [
-        'normal_0_short.csv',
-        'normal_1_short.csv'
-    ]
-    load_and_preprocess_input_files(f_names, relative_pc=True, ignore_non_jumps=False, file_loader_signals=None)
     active_methods_map = {
         'N-grams'              : True,
         'Isolation forest'     : True,
         'One class SVM'        : True,
         'Local outlier factor' : True
     }
+    f_names = [
+        'normal_0_short.csv',
+        'normal_1_short.csv'
+    ]
+    window_sizes = [7]
+
+    generate_artificial_kwargs = {
+        'anomalies_per_normal_file' : 10,
+        'reduce_loops' : False,
+        'reduce_loops_min_iteration_size' : 50 # unused
+        }
+
+    load_and_preprocess_input_files(f_names, relative_pc=True, ignore_non_jumps=False, file_loader_signals=None)
+    generate_artificial_anomalies_from_training_dataset(file_loader_signals=None, **generate_artificial_kwargs)
+    generate_sliding_windows(window_sizes, append_sliding_window_features=True, file_loader_signals=None)
     train_test_evaluate(active_methods_map)
 
     if args.save_models:
