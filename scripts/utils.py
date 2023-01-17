@@ -94,10 +94,16 @@ def dfs_to_sliding_windows(dfs, window_size, unique=False, append_features=False
         else:
             windows = windows.join(df)
     if unique:
-        windows = windows.drop_duplicates()
+        windows = df.value_counts(dropna=False, sort=False).reset_index(name='count')
+        windows_counts = windows.pop('count')
+        duplicate_map = df.duplicated(keep='first')
+        # windows = windows.drop_duplicates()
+    else:
+        windows_counts = None 
+        duplicate_map = None
 
     convert_df_columns_to_strings(windows) # just to avoid "FutureWarning" in sklearn or pandas (can't remember which)
-    return windows
+    return windows, windows_counts, duplicate_map
 
 def pc_and_instr_dfs_to_sliding_windows(df, df_instr, window_size, unique=False, append_features=False):
     ''' df contains a column per each ".pc" file where each cell is a program counter value.  '''

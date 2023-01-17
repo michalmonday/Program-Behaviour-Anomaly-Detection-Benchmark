@@ -163,7 +163,7 @@ class Detection_Model(ABC):
         #     logging.info(not_detected_anomalies)
         return not_detected_anomalies, evaluation_metrics
 
-    def evaluate_all_2(self, results_all, df_a_ground_truth_windowized):
+    def evaluate_all_2(self, results_all, df_a_ground_truth_windowized, windows_counts=None):
         ''' results_all = return of predict_all function 
             This function returns a dictionary of evaluation metrics:
             - anomaly_recall
@@ -176,7 +176,12 @@ class Detection_Model(ABC):
 
             The returned dictionary can be supplied directly to 
             "format_evaluation_metrics" method, to make it suitable
-            for printing/logging. '''
+            for printing/logging. 
+            
+            windows_counts is used for performance. results_all now contains results for unique windows,
+            and windows_counts contains how many times each window was repeated in the test/abnormal dataset.
+            We can then multiply both and get evaluation metrics for all windows without the need to run prediction
+            for duplicate windows, this should speed up evaluation process. '''
         # concatinate detection results and ground truth labels from 
         # all test examples (in other words, flatten nested list)
         all_detection_results = [val for results in results_all for val in results]
@@ -188,12 +193,18 @@ class Detection_Model(ABC):
 
         # all_ground_truth = df_a_ground_truth_windowized.melt(value_name='melted').drop('variable', axis=1).dropna()['melted']
 
+        import pdb; pdb.set_trace()
         melted_ground_truth = pd.melt(df_a_ground_truth_windowized.reset_index(), id_vars=['index']).dropna()
+        melted_windows_counts = pd.melt(pd.DataFrame(windows_counts).reset_index(), id_vars=['index']).dropna()
         # import pdb; pdb.set_trace()
         false_positives = melted_ground_truth[ np.where(melted_ground_truth.value.values, False, all_detection_results) ]
+        false_positives_windows_counts = melted_windows_counts[ false_positives.index ]
         non_anomalous = melted_ground_truth[ melted_ground_truth.value == set() ]
-        non_anomaly_count = non_anomalous.shape[0]
-        false_positives_count = false_positives.shape[0]
+        non_anomalous_windows_counts = melted_windows_counts[ non_anomalous.index ]
+        # non_anomaly_count = non_anomalous.shape[0]
+        non_anomaly_count = non_anomalous * non_anomalous_windows_counts # TODO: check if it works well
+        # false_positives_count = false_positives.shape[0]
+        false_positives_count = false_positives * false_positives_windows_counts # TODO: check if it works well
 
         # get all anomaly ids 
         all_anomalies = reduce(lambda s, s2: s|s2, melted_ground_truth.value.values)

@@ -276,6 +276,7 @@ dfs_a = None
 # df_a_instr = None
 # df_a_instr_numeric = None
 df_a_ground_truth = None
+df_a_ground_truth_no_duplicates = None
 anomalies_ranges = []
 pre_anomaly_values = []
 instruction_types = None
@@ -447,16 +448,19 @@ abnormal_files_training_size = None
 artificial_training_windows_all_sizes = {} # key = window size, value = windows dataframe
 normal_windows_all_sizes = {} # key = window size, value = normal window dataframe
 abnormal_windows_all_files_all_sizes = {} # key = window size, value = abnormal windows for all files
+# dict below (counts) is implemented for the sake of evaluation performance, instead of predicting the same window multiple times, we store its count and predict it only once
+abnormal_windows_counts_all_files_all_sizes = {} # key = window size, value = number of the same windows (corresponding to window from abnormal_windows_all_files_all_sizes) 
+# abnormal_windows_duplicate_map_all_files_all_sizes = {} # key = window size, value = series indicating which windows were duplicates and won't be predicted (so ground truth needs to be adjusted using the duplicate map to remove corresponding rows)
 df_a_ground_truth_windowized_all_sizes = {} # key = window size, value = ground truth labels for the testing dataset
 
 def clear_dicts():
     ''' resets dicts for sliding windows ''' 
-    dicts_to_clear = [artificial_training_windows_all_sizes, normal_windows_all_sizes, abnormal_windows_all_files_all_sizes, abnormal_windows_all_files_all_sizes, df_a_ground_truth_windowized_all_sizes]
+    dicts_to_clear = [artificial_training_windows_all_sizes, normal_windows_all_sizes, abnormal_windows_all_files_all_sizes, abnormal_windows_counts_all_files_all_sizes, df_a_ground_truth_windowized_all_sizes]#, abnormal_windows_duplicate_map_all_files_all_sizes]
     for dict_ in dicts_to_clear:
         dict_.clear()
 
 def generate_sliding_windows(window_sizes_, append_sliding_window_features, file_loader_signals=None):
-    global window_sizes, dfs_a, dfs_n
+    global window_sizes, dfs_a, dfs_n, df_a_ground_truth, df_a_ground_truth_no_duplicates
     clear_dicts()
     window_sizes = window_sizes_
 
@@ -483,7 +487,7 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
         logging.debug(f'... window size {window_size}')
         logging.debug(f'... generating normal windows')
         # normal_windows = utils.pc_and_instr_dfs_to_sliding_windows(
-        normal_windows = utils.dfs_to_sliding_windows(
+        normal_windows, _, _ = utils.dfs_to_sliding_windows(
                 # df_n, 
                 # df_n_instr_numeric,
                 dfs_n,
@@ -534,10 +538,18 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
         # TODO: no idea why I made it into a list in the first place, it should probably be a single DataFrame
         #       Edit: I think it's because I wanted to have a list of DataFrames, one for each file (because predict_all expects a list of windows, 1 for each file)
         abnormal_windows_all_files_all_sizes[window_size] = []
+        abnormal_windows_counts_all_files_all_sizes[window_size] = []
+
+        dfa_duplicate_maps = pd.DataFrame()
         for col_a_example in dfs_a['pc']:
             dfs_a_single_file = {k: v[[col_a_example]] for k, v in dfs_a.items()}
-            dfs_a_windows = utils.dfs_to_sliding_windows(dfs_a_single_file, window_size=window_size, unique=False, append_features=append_sliding_window_features)
+            dfs_a_windows, dfa_widnows_counts, dfa_duplicate_map = utils.dfs_to_sliding_windows(dfs_a_single_file, window_size=window_size, unique=True, append_features=append_sliding_window_features)
             abnormal_windows_all_files_all_sizes[window_size].append(dfs_a_windows)
+            abnormal_windows_counts_all_files_all_sizes[window_size].append(dfa_widnows_counts)
+            dfa_duplicate_maps[col_a_example] = dfa_duplicate_map
+            # dfs_duplicate_map will allow to remove duplicates from ground truth 
+            # abnormal_windows_duplicate_map_all_files_all_sizes[window_size].append(dfa_duplicate_map)
+
         # import pdb; pdb.set_trace()
         #  df_a.columns are:  [
         #   'randomize_section_(0,0,0): normal_1.csv',
@@ -584,11 +596,27 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
         #    '6_instr'
         #   ]
 
+        # adjust dfa_ground_truth using dfa_duplicate_map
+
+        # df.apply(lambda x: pd.Series(x.dropna().values))
+
+        # import pdb; pdb.set_trace() 
+        df_a_ground_truth_no_duplicates = pd.DataFrame()
+        for col in df_a_ground_truth:
+            # remove duplicates from ground truth
+            s = df_a_ground_truth[col].copy()
+            s[ dfa_duplicate_maps[col][dfa_duplicate_maps[col] == True].index ] = np.NaN
+            df_a_ground_truth_no_duplicates[col] = s
+
+        df_a_ground_truth_no_duplicates = df_a_ground_truth_no_duplicates.apply(lambda x: pd.Series(x.dropna().values))
+
+        df_a_ground_truth_no_duplicates = df_a_ground_truth.loc[dfa_duplicate_maps[dfa_duplicate_maps==False].index]
         logging.debug(f'... windowizing ground truth labels')
         df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
-                df_a_ground_truth,
+                df_a_ground_truth_no_duplicates,
                 window_size 
                 )
+
         df_a_ground_truth_windowized_all_sizes[window_size] = df_a_ground_truth_windowized
         df_stats.loc[window_size] = [
                 normal_windows.shape[0], # number of normal training windows
@@ -613,7 +641,7 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
     df_stats.to_csv(stats_path)
     return df_stats
 
-def test_model(model, abnormal_windows_all_files):
+def test_model(model, abnormal_windows_all_files): #, abnormal_windows_counts_all_files):
     logging.info('Testing...')
     start_time = time.time()
     results = model.predict_all(abnormal_windows_all_files)
@@ -621,9 +649,9 @@ def test_model(model, abnormal_windows_all_files):
     logging.info(f'Testing took {testing_time:.0f}ms')
     return results, testing_time
 
-def evaluate_results(results, model, df_a_ground_truth_windowized, window_size, method_name, method_base_name, training_time=0, testing_time=0):
+def evaluate_results(results, model, df_a_ground_truth_windowized, window_size, method_name, method_base_name, windows_counts=None, training_time=0, testing_time=0):
     # em = evaluation metrics
-    not_detected, em = model.evaluate_all_2(results, df_a_ground_truth_windowized)
+    not_detected, em = model.evaluate_all_2(results, df_a_ground_truth_windowized, windows_counts=windows_counts)
     logging.info( model.format_evaluation_metrics(em) )
     em['training_time_ms'] = int(training_time)
     em['testing_time_ms'] = int(testing_time)
@@ -648,10 +676,10 @@ def train_test_evaluate(active_methods_map, dont_plot=False, pyqt_progress_signa
             if pyqt_progress_signal:
                 pyqt_progress_signal.emit(('training', window_size, method_base_name, constructor_kwargs))
             normal_windows = normal_windows_all_sizes[window_size]
-
             df_a_ground_truth_windowized = df_a_ground_truth_windowized_all_sizes[window_size]
-
             abnormal_windows_all_files = abnormal_windows_all_files_all_sizes[window_size]
+            abnormal_windows_counts_all_files = abnormal_windows_counts_all_files_all_sizes[window_size]
+
             # constructor_args = {}
             # if 'constructor_args' in conf[method_base_name]:
             #     constructor_args = json.loads( conf[method_base_name].get('constructor_args').strip()[1:-1] )
@@ -698,7 +726,7 @@ def train_test_evaluate(active_methods_map, dont_plot=False, pyqt_progress_signa
             results, testing_time = test_model(model, abnormal_windows_all_files)
 
             # evaluation
-            not_detected, evaluation_metrics = evaluate_results(results, model, df_a_ground_truth_windowized, window_size, method_name, method_base_name, training_time=training_time, testing_time=testing_time)
+            not_detected, evaluation_metrics = evaluate_results(results, model, df_a_ground_truth_windowized, window_size, method_name, method_base_name, windows_counts=abnormal_windows_counts_all_files, training_time=training_time, testing_time=testing_time)
 
             df_results_all.loc[method_name] = evaluation_metrics
 
