@@ -98,7 +98,7 @@ def dfs_to_sliding_windows(dfs, window_size, unique=False, append_features=False
         duplicate_map = windows.duplicated(keep='first')
         counts_multi_indexed = windows.value_counts(dropna=False, sort=False) 
         # count_values have the same order as windows (unlike counts_multi_index that are sorted with forgotten original index/order)
-        windows_counts = counts_multi_indexed.loc[ [ tuple(windows.iloc[i].tolist()) for i in range(windows.shape[0])] ].values
+        windows_counts = counts_multi_indexed.loc[ [ tuple(windows.iloc[i]) for i in range(windows.shape[0])] ].values
         windows = windows[duplicate_map == False]
         # import pdb; pdb.set_trace()
         # test = windows.value_counts(dropna=False, sort=False).loc[ windows.iloc[0] ]

@@ -743,7 +743,7 @@ def train_test_evaluate(active_methods_map, dont_plot=False, pyqt_progress_signa
             not_detected, evaluation_metrics = evaluate_results(results, model, df_a_ground_truth_windowized, window_size, method_name, method_base_name, windows_counts=abnormal_windows_counts_all_files, training_time=training_time, testing_time=testing_time)
 
             # print(sum( (df_a_ground_truth_windowized[col] == set()).sum() for col in df_a_ground_truth_windowized ))
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
 
             df_results_all.loc[method_name] = evaluation_metrics
 
