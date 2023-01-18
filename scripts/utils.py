@@ -94,17 +94,10 @@ def dfs_to_sliding_windows(dfs, window_size, unique=False, append_features=False
         else:
             windows = windows.join(df)
     if unique:
-
         duplicate_map = windows.duplicated(keep='first')
-        counts_multi_indexed = windows.value_counts(dropna=False, sort=False) 
-        # count_values have the same order as windows (unlike counts_multi_index that are sorted with forgotten original index/order)
-        windows_counts = counts_multi_indexed.loc[ [ tuple(windows.iloc[i]) for i in range(windows.shape[0])] ].values
-        windows = windows[duplicate_map == False]
-        # import pdb; pdb.set_trace()
-        # test = windows.value_counts(dropna=False, sort=False).loc[ windows.iloc[0] ]
-        # windows = windows.value_counts(dropna=False, sort=False).reset_index(name='count').set_index( duplicate_map[duplicate_map==False].index )
-        # windows_counts = windows.pop('count')
-        # windows = windows.drop_duplicates()
+        counts_reordered = windows.value_counts(dropna=False, sort=False)
+        windows.drop_duplicates(inplace=True)
+        windows_counts = counts_reordered.reindex(tuple(values) for index, values in windows.iterrows()).values
     else:
         windows_counts = None 
         duplicate_map = None
