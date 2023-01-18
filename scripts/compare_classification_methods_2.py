@@ -453,6 +453,12 @@ abnormal_windows_counts_all_files_all_sizes = {} # key = window size, value = nu
 # abnormal_windows_duplicate_map_all_files_all_sizes = {} # key = window size, value = series indicating which windows were duplicates and won't be predicted (so ground truth needs to be adjusted using the duplicate map to remove corresponding rows)
 df_a_ground_truth_windowized_all_sizes = {} # key = window size, value = ground truth labels for the testing dataset
 
+# def compare_normal_abnormal_windows():
+#     abnormal_windows_all_files_all_sizes[7][0].astype(np.float64).to_csv('test1_abnormal.csv') 
+#     normal_windows_all_sizes[7].iloc[0:].astype(np.float64).to_csv('test1_normal.csv')  
+# # (Pdb) df_a_ground_truth.iloc[:,0].to_csv('test1_gt.csv')
+# # (Pdb) !s.to_csv('test1_gt_no_dup.csv')
+
 def clear_dicts():
     ''' resets dicts for sliding windows ''' 
     dicts_to_clear = [artificial_training_windows_all_sizes, normal_windows_all_sizes, abnormal_windows_all_files_all_sizes, abnormal_windows_counts_all_files_all_sizes, df_a_ground_truth_windowized_all_sizes]#, abnormal_windows_duplicate_map_all_files_all_sizes]
@@ -544,9 +550,11 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
         for col_a_example in dfs_a['pc']:
             dfs_a_single_file = {k: v[[col_a_example]] for k, v in dfs_a.items()}
             dfs_a_windows, dfa_widnows_counts, dfa_duplicate_map = utils.dfs_to_sliding_windows(dfs_a_single_file, window_size=window_size, unique=True, append_features=append_sliding_window_features)
+            # import pdb; pdb.set_trace()
             abnormal_windows_all_files_all_sizes[window_size].append(dfs_a_windows)
             abnormal_windows_counts_all_files_all_sizes[window_size].append(dfa_widnows_counts)
             dfa_duplicate_maps[col_a_example] = dfa_duplicate_map
+
             # dfs_duplicate_map will allow to remove duplicates from ground truth 
             # abnormal_windows_duplicate_map_all_files_all_sizes[window_size].append(dfa_duplicate_map)
 
@@ -601,21 +609,27 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
         # df.apply(lambda x: pd.Series(x.dropna().values))
 
         # import pdb; pdb.set_trace() 
-        df_a_ground_truth_no_duplicates = pd.DataFrame()
-        for col in df_a_ground_truth:
-            # remove duplicates from ground truth
-            s = df_a_ground_truth[col].copy()
-            s[ dfa_duplicate_maps[col][dfa_duplicate_maps[col] == True].index ] = np.NaN
-            df_a_ground_truth_no_duplicates[col] = s
 
-        df_a_ground_truth_no_duplicates = df_a_ground_truth_no_duplicates.apply(lambda x: pd.Series(x.dropna().values))
 
-        df_a_ground_truth_no_duplicates = df_a_ground_truth.loc[dfa_duplicate_maps[dfa_duplicate_maps==False].index]
+        # df_a_ground_truth_no_duplicates = df_a_ground_truth.loc[dfa_duplicate_maps[dfa_duplicate_maps==False].index]
         logging.debug(f'... windowizing ground truth labels')
         df_a_ground_truth_windowized = utils.windowize_ground_truth_labels_2(
-                df_a_ground_truth_no_duplicates,
+                df_a_ground_truth,
                 window_size 
                 )
+
+        logging.debug(f'... removing duplicates from ground truth labels windows')
+        df_a_ground_truth_no_duplicates = pd.DataFrame()
+        for col in df_a_ground_truth_windowized.columns:
+            s = df_a_ground_truth_windowized[col].copy()
+            s[ dfa_duplicate_maps[col][dfa_duplicate_maps[col] == True].index ] = np.NaN
+            df_a_ground_truth_no_duplicates[col] = s.copy()
+            # compare_normal_abnormal_windows()
+            # import pdb; pdb.set_trace()
+        # df_a_ground_truth_no_duplicates = df_a_ground_truth_no_duplicates.apply(lambda x: pd.Series(x.dropna().values))
+        df_a_ground_truth_windowized = df_a_ground_truth_no_duplicates.apply(lambda x: pd.Series(x.dropna().values))
+
+
 
         df_a_ground_truth_windowized_all_sizes[window_size] = df_a_ground_truth_windowized
         df_stats.loc[window_size] = [
@@ -728,6 +742,9 @@ def train_test_evaluate(active_methods_map, dont_plot=False, pyqt_progress_signa
             # evaluation
             not_detected, evaluation_metrics = evaluate_results(results, model, df_a_ground_truth_windowized, window_size, method_name, method_base_name, windows_counts=abnormal_windows_counts_all_files, training_time=training_time, testing_time=testing_time)
 
+            # print(sum( (df_a_ground_truth_windowized[col] == set()).sum() for col in df_a_ground_truth_windowized ))
+            import pdb; pdb.set_trace()
+
             df_results_all.loc[method_name] = evaluation_metrics
 
             if not not_detected.empty and conf['output'].getboolean('plot_not_detected_anomalies'):
@@ -779,7 +796,7 @@ if __name__ == '__main__':
     load_and_preprocess_input_files(f_names, relative_pc=True, ignore_non_jumps=False, file_loader_signals=None)
     generate_artificial_anomalies_from_training_dataset(file_loader_signals=None, **generate_artificial_kwargs)
     generate_sliding_windows(window_sizes, append_sliding_window_features=True, file_loader_signals=None)
-    train_test_evaluate(active_methods_map)
+    train_test_evaluate(active_methods_map, dont_plot=True)
 
     if args.save_models:
         save_models()
