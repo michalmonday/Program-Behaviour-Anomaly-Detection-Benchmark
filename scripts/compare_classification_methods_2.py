@@ -453,11 +453,11 @@ abnormal_windows_counts_all_files_all_sizes = {} # key = window size, value = nu
 # abnormal_windows_duplicate_map_all_files_all_sizes = {} # key = window size, value = series indicating which windows were duplicates and won't be predicted (so ground truth needs to be adjusted using the duplicate map to remove corresponding rows)
 df_a_ground_truth_windowized_all_sizes = {} # key = window size, value = ground truth labels for the testing dataset
 
-# def compare_normal_abnormal_windows():
-#     abnormal_windows_all_files_all_sizes[7][0].astype(np.float64).to_csv('test1_abnormal.csv') 
-#     normal_windows_all_sizes[7].iloc[0:].astype(np.float64).to_csv('test1_normal.csv')  
-# # (Pdb) df_a_ground_truth.iloc[:,0].to_csv('test1_gt.csv')
-# # (Pdb) !s.to_csv('test1_gt_no_dup.csv')
+def compare_normal_abnormal_windows():
+    abnormal_windows_all_files_all_sizes[7][0].astype(np.float64).to_csv('test1_abnormal.csv') 
+    normal_windows_all_sizes[7].iloc[0:].astype(np.float64).to_csv('test1_normal.csv')  
+# (Pdb) df_a_ground_truth.iloc[:,0].to_csv('test1_gt.csv')
+# (Pdb) !s.to_csv('test1_gt_no_dup.csv')
 
 def clear_dicts():
     ''' resets dicts for sliding windows ''' 
@@ -628,6 +628,7 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
             # import pdb; pdb.set_trace()
         # df_a_ground_truth_no_duplicates = df_a_ground_truth_no_duplicates.apply(lambda x: pd.Series(x.dropna().values))
         df_a_ground_truth_windowized = df_a_ground_truth_no_duplicates.apply(lambda x: pd.Series(x.dropna().values))
+        # import pdb; pdb.set_trace()
 
 
 
@@ -737,6 +738,9 @@ def train_test_evaluate(active_methods_map, dont_plot=False, pyqt_progress_signa
                 pyqt_progress_signal.emit(('testing', window_size, method_base_name, constructor_kwargs))
 
             # testing
+            # compare_normal_abnormal_windows()
+            # import pdb; pdb.set_trace()    
+            
             results, testing_time = test_model(model, abnormal_windows_all_files)
 
             # evaluation

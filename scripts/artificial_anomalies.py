@@ -4,6 +4,7 @@ import random
 import utils
 import logging
 from copy import deepcopy
+import traceback
 
 from compare_classification_methods_GUI.file_load_status import FileLoadStatus
 
@@ -20,38 +21,108 @@ class Artificial_Anomalies:
     #         __class__.minimal
     #         ]
 
+    # @staticmethod
+    # def randomize_section(col, col_instr, instruction_types, section_size=None, offset=None):
+    #     ''' Easy to detect
+    #         Set random values within a section '''
+    #     if section_size is None:
+    #         section_size = __class__.generate_random_section_size(col)
+    #     if offset is None:
+    #         offset = __class__.generate_random_offset(col, section_size)
+
+    #     anomalies_ranges, original_values = ([], [])
+    #     original_values.append(col[offset-1:offset+section_size+1].copy())
+    #     anomalies_ranges.append((offset-1,offset+section_size))
+
+    #     new_values = []
+    #     new_instr = []
+    #     for i in range(section_size):
+    #         original_value = original_values[-1].iloc[i+1]
+    #         val = original_value
+    #         while val == original_value:
+    #             val = random.randint(col.min(), col.max())
+    #         new_values.append(val)
+    #         new_instr.append(random.choice(list(instruction_types.keys())))
+
+    #     col[offset:offset+section_size] = new_values
+    #     try:
+    #         col_instr[offset:offset+section_size] = new_instr
+    #     except Exception as e:
+    #         print(e)
+    #         import pdb; pdb.set_trace()
+    #     col_ground_truth = __class__.generate_ground_truth_column(col, offset, section_size)
+    #     return col, col_instr, anomalies_ranges, original_values, col_ground_truth
+
 
     @staticmethod
-    def randomize_section(col, col_instr, instruction_types, section_size=None, offset=None):
+    # def randomize_section(col, col_instr, instruction_types, section_size=None, offset=None):
+    def randomize_section(dfs_n, file_col_name, instruction_types, section_size=None, offset=None):
+        # !!! TODO: only this method was adapted as of 19/01/2023 to produce anomalies in all metrics (not only in pc and instruction)
         ''' Easy to detect
             Set random values within a section '''
+
+        # col = dfs_n['pc'][file_col_name]
+        # col_instr = dfs_n['instr_name'][file_col_name]
+
+        # first check what kind of dtype a series has
+
+        col_pc = dfs_n['pc'][file_col_name]
+
         if section_size is None:
-            section_size = __class__.generate_random_section_size(col)
+            section_size = __class__.generate_random_section_size(col_pc)
         if offset is None:
-            offset = __class__.generate_random_offset(col, section_size)
+            offset = __class__.generate_random_offset(col_pc, section_size)
 
         anomalies_ranges, original_values = ([], [])
-        original_values.append(col[offset-1:offset+section_size+1].copy())
+        all_original_values = {metric_name : [] for metric_name in dfs_n.keys()}
+        cols_dict = {}
+        for metric_name, df_n in dfs_n.items():
+            original_values = df_n[file_col_name][offset-1:offset+section_size+1].copy()
+            all_original_values[metric_name].append(original_values)
+
+            col = df_n[file_col_name].copy()
+            cols_dict[metric_name] = col
+            if col.dtype == 'object':
+                new_values = np.random.choice(col.dropna(), section_size)
+            else:
+                if col.max() == 0:
+                    new_values = np.zeros(section_size, dtype=col.dtype)
+                else:
+                    try:
+                        new_values = np.random.randint(col.min(), col.max(), section_size, dtype=np.int64)
+                    except ValueError as e:
+                        traceback.print_exc()
+                        import pdb; pdb.set_trace()
+            cols_dict[metric_name][offset:offset+section_size] = new_values
+            # if metric_name == 'instr_names':
+            #     import pdb; pdb.set_trace()
+
+        # original_values.append(col_pc[offset-1:offset+section_size+1].copy())
         anomalies_ranges.append((offset-1,offset+section_size))
 
-        new_values = []
-        new_instr = []
-        for i in range(section_size):
-            original_value = original_values[-1].iloc[i+1]
-            val = original_value
-            while val == original_value:
-                val = random.randint(col.min(), col.max())
-            new_values.append(val)
-            new_instr.append(random.choice(list(instruction_types.keys())))
 
-        col[offset:offset+section_size] = new_values
-        try:
-            col_instr[offset:offset+section_size] = new_instr
-        except Exception as e:
-            print(e)
-            import pdb; pdb.set_trace()
-        col_ground_truth = __class__.generate_ground_truth_column(col, offset, section_size)
-        return col, col_instr, anomalies_ranges, original_values, col_ground_truth
+        # new_values = []
+        # new_instr = []
+        # for i in range(section_size):
+        #     original_value = original_values[-1].iloc[i+1]
+        #     val = original_value
+        #     while val == original_value:
+        #         val = random.randint(col.min(), col.max())
+        #     new_values.append(val)
+        #     new_instr.append(random.choice(list(instruction_types.keys())))
+
+        # import pdb; pdb.set_trace()
+
+        # # col[offset:offset+section_size] = new_values
+        # # try:
+        # #     col_instr[offset:offset+section_size] = new_instr
+        # # except Exception as e:
+        # #     print(e)
+        # import pdb; pdb.set_trace()
+
+        col_ground_truth = __class__.generate_ground_truth_column(cols_dict['pc'], offset, section_size)
+        # # return col, col_instr, anomalies_ranges, original_values, col_ground_truth
+        return cols_dict, anomalies_ranges, all_original_values, col_ground_truth
 
 
     # TODO: adapt for more inputs than just pc and instr
@@ -306,7 +377,7 @@ class Artificial_Anomalies:
                 ]
         anomalies_ranges = []
         pre_anomaly_pc_values = []
-        dfs_a = {}
+        dfs_a = {metric_name : pd.DataFrame() for metric_name in dfs_n.keys()}
         # df_a = pd.DataFrame()
         # df_a_instr = pd.DataFrame()
         df_a_ground_truth = pd.DataFrame(dtype=bool)
@@ -350,21 +421,28 @@ class Artificial_Anomalies:
 
                     # section_size = __class__.generate_random_section_size(df_n[col_name])
                     # offset = __class__.generate_random_offset(df_n[col_name], section_size)
-                    col_a, col_a_instr, ar, pav, col_a_ground_truth = method(dfs_n['pc'][col_name].copy(), dfs_n['instr_names'][col_name].copy(), instruction_types) #, section_size=section_size, offset=offset)
+                    # col_a, col_a_instr, ar, pav, col_a_ground_truth = method(dfs_n['pc'][col_name].copy(), dfs_n['instr_names'][col_name].copy(), instruction_types) #, section_size=section_size, offset=offset)
+                    cols_dict, ar, original_values, col_a_ground_truth = method(dfs_n, col_name, instruction_types) #, section_size=section_size, offset=offset)
                     # keep record of anomalies and previous values (for plotting later)
                     anomalies_ranges.append(ar)
-                    pre_anomaly_pc_values.append(pav)
+                    pre_anomaly_pc_values.append(original_values['pc'])
                     # rename column
                     new_col_name = col_name.replace('normal', f'{method.__name__}_({i},{j},{k})', 1)
                     for metric_name in dfs_n.keys():
-                        if metric_name not in dfs_a:
-                            dfs_a[metric_name] = pd.DataFrame()
-                        if metric_name == 'pc':
-                            dfs_a['pc'][new_col_name] = col_a
-                        elif metric_name == 'instr_names':
-                            dfs_a['instr_names'][new_col_name] = col_a_instr
-                        else:
-                            dfs_a[metric_name][new_col_name] = dfs_n[metric_name][col_name]
+                        try:
+                            dfs_a[metric_name][new_col_name] = cols_dict[metric_name].astype(dfs_n[metric_name][col_name].dtype)
+                        except KeyError as e:
+                            print(f'Exception: Key error {e}')
+                            import pdb; pdb.set_trace()
+                        # if metric_name not in dfs_a:
+                        #     dfs_a[metric_name] = pd.DataFrame()
+                        # if metric_name == 'pc':
+                        #     dfs_a['pc'][new_col_name] = col_a
+                        # elif metric_name == 'instr_names':
+                        #     dfs_a['instr_names'][new_col_name] = col_a_instr
+                        # else:
+                        #     dfs_a[metric_name][new_col_name] = dfs_n[metric_name][col_name]
+
                     # df_a[new_col_name] = col_a
                     # df_a_instr[new_col_name] = col_a_instr
                     df_a_ground_truth[new_col_name] = col_a_ground_truth
@@ -407,6 +485,8 @@ class Artificial_Anomalies:
         #             file_loader_signals.update_file_status.emit((f_names[j], FileLoadStatus.REDUCED_LOOPS.value))
 
         # return df_a, df_a_instr, df_a_ground_truth, anomalies_ranges, pre_anomaly_pc_values
+
+        # import pdb; pdb.set_trace()
         return dfs_a, df_a_ground_truth, anomalies_ranges, pre_anomaly_pc_values
 
 # Testing code

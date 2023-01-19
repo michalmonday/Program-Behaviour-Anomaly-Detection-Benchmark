@@ -9,6 +9,7 @@ import logging
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 from functools import reduce
 from abc import ABC, abstractmethod
+import traceback
 
 class Detection_Model(ABC):
     evaluation_metrics = [
@@ -198,7 +199,12 @@ class Detection_Model(ABC):
         false_positives = melted_ground_truth[ np.where(melted_ground_truth.value.values, False, all_detection_results) ]
         false_positives_windows_counts = melted_windows_counts.loc[ false_positives.index ]
         non_anomalous = melted_ground_truth[ melted_ground_truth.value == set() ]
-        non_anomalous_windows_counts = melted_windows_counts.loc[ non_anomalous.index ]
+        try:  
+            non_anomalous_windows_counts = melted_windows_counts.loc[ non_anomalous.index ]
+        except KeyError:
+            traceback.print_exc()
+            import pdb; pdb.set_trace()
+
         # non_anomaly_count = non_anomalous.shape[0]
         # import pdb; pdb.set_trace()
         non_anomaly_count = non_anomalous_windows_counts.value.sum() #non_anomalous * non_anomalous_windows_counts # TODO: check if it works well

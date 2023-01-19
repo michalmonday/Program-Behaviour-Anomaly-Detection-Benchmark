@@ -8,6 +8,7 @@ import re
 import os
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 from tabulate import tabulate
+import traceback
 
 from compare_classification_methods_GUI.file_load_status import FileLoadStatus
 
@@ -78,7 +79,7 @@ def dfs_to_sliding_windows(dfs, window_size, unique=False, append_features=False
         windows = series_to_sliding_windows(df['all_values'], window_size, suffix=f'_{metric_name}')
 
         # TODO: possibly add check if metric name == 'pc' 
-        if append_features:
+        if append_features and metric_name == 'pc':
             windows = append_features_to_sliding_windows(windows, suffix=f'_{metric_name}')
         dfs_windows[metric_name] = windows
 
@@ -352,7 +353,11 @@ def append_features_to_sliding_windows(windows, suffix='', round_digits=4):
     windows['min' + suffix] = min_
     windows['max' + suffix] = max_
     windows['jumps_count' + suffix] = jumps_count
-    windows['mean_jump_size' + suffix] = mean_jump_size.round(round_digits)
+    try:
+        windows['mean_jump_size' + suffix] = mean_jump_size if type(mean_jump_size) == int else mean_jump_size.round(round_digits)
+    except Exception as e:
+        print(traceback.print_exc())
+        import pdb; pdb.set_trace()
     windows.fillna(0, inplace=True) # mean_jump_size may be NaN in case of system calls...
     return windows
 
