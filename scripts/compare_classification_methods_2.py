@@ -546,14 +546,22 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
         abnormal_windows_all_files_all_sizes[window_size] = []
         abnormal_windows_counts_all_files_all_sizes[window_size] = []
 
-        dfa_duplicate_maps = pd.DataFrame()
-        for col_a_example in dfs_a['pc']:
-            dfs_a_single_file = {k: v[[col_a_example]] for k, v in dfs_a.items()}
+        dfa_duplicate_maps = pd.DataFrame(np.NaN, index=np.arange(dfs_a['pc'].shape[0]), columns=dfs_a['pc'].columns)
+        for i, col_a_example in enumerate(dfs_a['pc']):
+            dfs_a_single_file = {metric_name: v[[col_a_example]] for metric_name, v in dfs_a.items()}
             dfs_a_windows, dfa_widnows_counts, dfa_duplicate_map = utils.dfs_to_sliding_windows(dfs_a_single_file, window_size=window_size, unique=True, append_features=append_sliding_window_features)
+            print(f'Windowizing {i}. dfa_duplicate_map.sum() = {dfa_duplicate_map.sum()}, col={col_a_example}')
             # import pdb; pdb.set_trace()
             abnormal_windows_all_files_all_sizes[window_size].append(dfs_a_windows)
             abnormal_windows_counts_all_files_all_sizes[window_size].append(dfa_widnows_counts)
-            dfa_duplicate_maps[col_a_example] = dfa_duplicate_map
+            dfa_duplicate_maps[col_a_example] = dfa_duplicate_map.copy()
+            print(f'Post windowizing {i}. dfa_duplicate_map.sum() = {dfa_duplicate_map.sum()}, col={col_a_example}')
+            print(f'Post windowizing {i}. dfa_duplicate_maps[col_a_example].sum() = {dfa_duplicate_maps[col_a_example].sum()}, col={col_a_example}')
+            if i == 10:
+                dfa_duplicate_map.to_csv('dfa_duplicate_map.csv')
+                dfa_duplicate_maps[col_a_example].to_csv('dfa_duplicate_maps-col_a_example.csv')
+
+
 
             # dfs_duplicate_map will allow to remove duplicates from ground truth 
             # abnormal_windows_duplicate_map_all_files_all_sizes[window_size].append(dfa_duplicate_map)
@@ -620,19 +628,29 @@ def generate_sliding_windows(window_sizes_, append_sliding_window_features, file
 
         logging.debug(f'... removing duplicates from ground truth labels windows')
         df_a_ground_truth_no_duplicates = pd.DataFrame()
-        for col in df_a_ground_truth_windowized.columns:
+        for i, col in enumerate(df_a_ground_truth_windowized.columns):
+            # if i == 10:
+            #     print('debugging i=10')
+            #     import pdb; pdb.set_trace()
             s = df_a_ground_truth_windowized[col].copy()
-            s[ dfa_duplicate_maps[col][dfa_duplicate_maps[col] == True].index ] = np.NaN
+            print(f'Before ground truth setting {i}. dfa_duplicate_maps[col].sum() = {dfa_duplicate_maps[col].sum()}, col={col}')
+            s.loc[ dfa_duplicate_maps[col][dfa_duplicate_maps[col] == True].index ] = np.NaN
             df_a_ground_truth_no_duplicates[col] = s.copy()
+            print(f'Ground truth setting {i}. dfa_duplicate_maps[col].sum() = {dfa_duplicate_maps[col].sum()}, col={col}')
             # compare_normal_abnormal_windows()
             # import pdb; pdb.set_trace()
         # df_a_ground_truth_no_duplicates = df_a_ground_truth_no_duplicates.apply(lambda x: pd.Series(x.dropna().values))
         df_a_ground_truth_windowized = df_a_ground_truth_no_duplicates.apply(lambda x: pd.Series(x.dropna().values))
-        # import pdb; pdb.set_trace()
 
+        for i, col in enumerate(df_a_ground_truth_windowized):
+            print(df_a_ground_truth_windowized[col].dropna().shape[0], abnormal_windows_all_files_all_sizes[window_size][i].shape[0])
+            if df_a_ground_truth_windowized[col].dropna().shape[0] != abnormal_windows_all_files_all_sizes[window_size][i].shape[0]:
+                print('size mismatch')
+                import pdb; pdb.set_trace()
 
 
         df_a_ground_truth_windowized_all_sizes[window_size] = df_a_ground_truth_windowized
+
         df_stats.loc[window_size] = [
                 normal_windows.shape[0], # number of normal training windows
                 0, # number of abnormal training windows

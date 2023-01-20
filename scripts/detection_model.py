@@ -196,6 +196,7 @@ class Detection_Model(ABC):
 
         melted_ground_truth = pd.melt(df_a_ground_truth_windowized.reset_index(), id_vars=['index']).dropna()
         melted_windows_counts = pd.melt(pd.DataFrame(windows_counts).T.reset_index(), id_vars=['index']).dropna()
+        # import pdb; pdb.set_trace()
         false_positives = melted_ground_truth[ np.where(melted_ground_truth.value.values, False, all_detection_results) ]
         false_positives_windows_counts = melted_windows_counts.loc[ false_positives.index ]
         non_anomalous = melted_ground_truth[ melted_ground_truth.value == set() ]
