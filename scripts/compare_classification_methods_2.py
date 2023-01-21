@@ -125,6 +125,11 @@ import joblib
 import re
 import pickle
 
+import inspect
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+sys.path.insert(0, parentdir) 
+
 import utils
 from utils import plot_pc_histogram, plot_pc_timeline, plot_vspans, plot_vspans_ranges, print_config
 from artificial_anomalies import Artificial_Anomalies
